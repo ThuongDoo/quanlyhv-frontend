@@ -89,39 +89,37 @@ export default function Students() {
   const filterOptions = useMemo(() => {
     const unique = (arr) => [...new Set(arr.filter(Boolean))];
     return {
-      mobileCarrier: unique(students.map((s) => s.mobileCarrier)).map((v) => ({
-        value: v,
-        label: v,
-      })),
-      clasification: Object.entries(classificationConfig).map(([value, cfg]) => ({
-        value,
-        label: cfg.label,
-      })),
-      university: unique(students.map((s) => s.university)).map((v) => ({
-        value: v,
-        label: v,
-      })),
+      mobileCarrier: unique(students.map((s) => s.mobileCarrier)).map((v) => ({ value: v, label: v })),
+      clasification: Object.entries(classificationConfig).map(([value, cfg]) => ({ value, label: cfg.label })),
+      university: unique(students.map((s) => s.university)).map((v) => ({ value: v, label: v })),
       ownerUserId: unique(students.map((s) => s.ownerUserId)).map((id) => {
         const u = users.find((x) => (x._id || x.id) === id);
         return { value: id, label: u?.name || u?.username || id };
       }),
+      consultant: users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
+      status: Object.entries(statusConfig).map(([value, cfg]) => ({ value, label: cfg.label })),
+      currentStepKey: Object.entries(STEP_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label })),
     };
   }, [students, users]);
 
+  // Only clasification is filtered client-side (backend doesn't support it).
+  // All other filters are sent as query params to the API.
   const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
-      if (filters.mobileCarrier?.length && !filters.mobileCarrier.includes(s.mobileCarrier)) return false;
-      if (filters.clasification?.length && !filters.clasification.includes(s.clasification || "0")) return false;
-      if (filters.university?.length && !filters.university.includes(s.university)) return false;
-      if (filters.ownerUserId?.length && !filters.ownerUserId.includes(s.ownerUserId)) return false;
-      return true;
-    });
-  }, [students, filters]);
+    if (!filters.clasification?.length) return students;
+    return students.filter((s) => filters.clasification.includes(s.clasification || "0"));
+  }, [students, filters.clasification]);
 
   const loadStudents = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await studentApi.fetchStudents({ page, limit, search });
+      const params = { page, limit, search };
+      if (filters.mobileCarrier?.length) params.mobileCarrier = filters.mobileCarrier;
+      if (filters.university?.length) params.university = filters.university;
+      if (filters.ownerUserId?.length) params.ownerUserId = filters.ownerUserId;
+      if (filters.consultant?.length) params.consultant = filters.consultant;
+      if (filters.status?.length) params.status = filters.status;
+      if (filters.currentStepKey?.length) params.currentStepKey = filters.currentStepKey[0];
+      const response = await studentApi.fetchStudents(params);
 
       setStudents(response.students || []);
       setPagination(response.pagination || { page, limit, total: 0, pages: 1 });
@@ -135,7 +133,7 @@ export default function Students() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search]);
+  }, [page, limit, search, filters]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -516,20 +514,34 @@ export default function Students() {
       )}
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
-        {activeFilterCount > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-500">
-              Đang lọc: <span className="font-semibold text-indigo-600">{activeFilterCount} điều kiện</span>
-            </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Bước hiện tại:</span>
+          {[{ value: "", label: "Tất cả" }, ...Object.entries(STEP_CONFIG).map(([v, c]) => ({ value: v, label: c.label }))].map(({ value, label }) => {
+            const active = value === (filters.currentStepKey?.[0] || "");
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  setFilters((prev) => ({ ...prev, currentStepKey: value ? [value] : [] }));
+                  setPage(1);
+                }}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition border ${active ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"}`}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {activeFilterCount > 0 && (
             <button
               type="button"
               onClick={() => { setFilters({}); setPage(1); }}
-              className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-500 hover:bg-red-100 transition"
+              className="ml-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-500 hover:bg-red-100 transition"
             >
-              Xóa tất cả bộ lọc
+              Xóa tất cả ({activeFilterCount})
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {showCreatePanel && (
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -812,12 +824,34 @@ export default function Students() {
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">
                     Ngày Giờ Hẹn Đến
                   </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
-                    Tư Vấn Viên
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
-                    Đã Đến
-                  </th>
+                  {[
+                    { col: "consultant", label: "Tư Vấn Viên" },
+                    { col: "status", label: "Đã Đến" },
+                  ].map(({ col, label }) => (
+                    <th key={col} className="px-4 py-3 text-left font-semibold text-slate-600 relative">
+                      <button
+                        type="button"
+                        onClick={() => setOpenFilterCol(openFilterCol === col ? null : col)}
+                        className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
+                      >
+                        {label}
+                        {filters[col]?.length > 0 && (
+                          <span className="bg-indigo-600 text-white text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
+                            {filters[col].length}
+                          </span>
+                        )}
+                        <span className="text-xs opacity-50">▾</span>
+                      </button>
+                      {openFilterCol === col && (
+                        <FilterDropdown
+                          options={filterOptions[col] || []}
+                          selected={filters[col] || []}
+                          onToggle={(value) => toggleFilter(col, value)}
+                          onClear={() => clearFilter(col)}
+                        />
+                      )}
+                    </th>
+                  ))}
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">
                     Note Vấn đề
                   </th>
