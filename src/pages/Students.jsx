@@ -1,77 +1,400 @@
-import { useState } from "react";
-
-const MOCK_DATA = Array.from({ length: 54 * 7 }, (_, i) => {
-  const names = [
-    "Nguyễn Thị Hồng Ngọc",
-    "Hoàng Công Vinh",
-    "Nguyễn Quang Tài",
-    "Ngô Trung Hiệu",
-    "Nguyễn Khánh Tường Vi",
-    "Nguyễn Hồ Đông Hưng",
-    "Bàn Thị Nhật Lệ",
-    "Trần Minh Khoa",
-    "Lê Thị Thu Hà",
-    "Phạm Văn Đức",
-  ];
-  const phones = [
-    "933212846",
-    "767168013",
-    "708525581",
-    "936243267",
-    "763701810",
-    "776734756",
-    "387039882",
-    "912345678",
-    "987654321",
-    "901234567",
-  ];
-  const loai = ["Loại 1", "Loại 2", "Loại 3"];
-  const lamAm = ["nhiệt tình", "quan tâm", "do dự", "lạnh nhạt", ""];
-  const ngayHen = ["14h 27/04/2026", "09h 28/04/2026", "10h 01/05/2026", ""];
-  const da = ["Ch", "Đã", ""];
-
-  const idx = i % names.length;
-  return {
-    id: 1348 - i,
-    hoTen: names[idx],
-    sdt: phones[idx],
-    phanLoai: loai[i % 3],
-    truong: i % 5 === 0 ? "THPT Lê Quý Đôn" : "",
-    saleMoi: i % 7 === 0 ? "Nguyễn A" : "",
-    lamAm: lamAm[i % lamAm.length],
-    lienHe1: i % 4 === 0 ? "Đã gọi" : "",
-    lienHe2: i % 8 === 0 ? "Zalo" : "",
-    ngayHen: ngayHen[i % ngayHen.length],
-    da: da[i % da.length],
-  };
-});
-
-const PAGE_SIZE = 7;
-
-const loaiConfig = {
-  "Loại 1": "bg-red-100 text-red-700 border-red-200",
-  "Loại 2": "bg-amber-100 text-amber-700 border-amber-200",
-  "Loại 3": "bg-slate-100 text-slate-600 border-slate-200",
-};
+﻿import { useCallback, useEffect, useState } from "react";
+import { studentApi } from "../services/students";
+import { authApi } from "../services/auth";
+import StepCell from "../components/StepCell";
+import {
+  classificationConfig,
+  statusConfig,
+  STEP_CONFIG,
+} from "../constants/studentConfig";
+import {
+  formatStepSummary,
+  formatStepInputValue,
+  getStep,
+} from "../utils/studentHelpers";
 
 export default function Students() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [limit] = useState(80);
+  const [students, setStudents] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 80,
+    total: 0,
+    pages: 1,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importMessage, setImportMessage] = useState("");
+  const [editingClassification, setEditingClassification] = useState(null);
+  const [editingStep, setEditingStep] = useState(null);
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [selectedStudents, setSelectedStudents] = useState(new Set());
+  const [showAssignPanel, setShowAssignPanel] = useState(false);
+  const [assignUserId, setAssignUserId] = useState("");
+  const [assignMessage, setAssignMessage] = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [appointmentModal, setAppointmentModal] = useState({
+    open: false,
+    studentId: null,
+    date: "",
+    time: "",
+    consultant: "",
+  });
+  const [newStudent, setNewStudent] = useState({
+    name: "",
+    phone: "",
+    year: new Date().getFullYear(),
+    mobileCarrier: "",
+    university: "",
+  });
 
-  const filtered = MOCK_DATA.filter(
-    (s) =>
-      s.hoTen.toLowerCase().includes(search.toLowerCase()) ||
-      s.sdt.includes(search),
-  );
+  console.log(students);
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const loadStudents = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await studentApi.fetchStudents({ page, limit, search });
 
-  const handleSearch = (e) => {
-    setSearch(e.target.value);
+      setStudents(response.students || []);
+      setPagination(response.pagination || { page, limit, total: 0, pages: 1 });
+      setError("");
+    } catch (err) {
+      setError(
+        err?.response?.data?.error ||
+          err?.message ||
+          "Không thể tải danh sách học viên.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [page, limit, search]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadStudents();
+  }, [loadStudents]);
+
+  useEffect(() => {
+    authApi
+      .fetchUsers()
+      .then((data) => {
+        setUsers(Array.isArray(data) ? data : data.users || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSearch = (event) => {
+    setSearch(event.target.value);
     setPage(1);
   };
 
+  const handleCreateSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+
+    try {
+      await studentApi.createStudent({
+        name: newStudent.name,
+        phone: newStudent.phone,
+        year: Number(newStudent.year),
+        mobileCarrier: newStudent.mobileCarrier,
+        university: newStudent.university,
+      });
+      setNewStudent({
+        name: "",
+        phone: "",
+        year: new Date().getFullYear(),
+        mobileCarrier: "",
+        university: "",
+      });
+      setShowCreatePanel(false);
+      loadStudents();
+    } catch (err) {
+      setError(
+        err?.response?.data?.error || err?.message || "Không thể tạo học viên.",
+      );
+    }
+  };
+
+  const handleImportSubmit = async (event) => {
+    event.preventDefault();
+    if (!importFile) {
+      setImportMessage("Vui lòng chọn file Excel trước khi import.");
+      return;
+    }
+
+    try {
+      console.log(" send data");
+
+      const response = await studentApi.importStudents(importFile);
+      console.log("complete");
+
+      setImportMessage(response.message || "Import hoàn tất.");
+      setImportFile(null);
+      loadStudents();
+    } catch (err) {
+      setImportMessage(
+        err?.response?.data?.error || err?.message || "Import thất bại.",
+      );
+    }
+  };
+
+  const handleClassificationChange = async (studentId, newClassification) => {
+    try {
+      await studentApi.updateStudent(studentId, {
+        clasification: newClassification,
+      });
+      setStudents((prevStudents) =>
+        prevStudents.map((student) => {
+          const id = student.id || student._id;
+          if (id !== studentId) return student;
+          return { ...student, clasification: newClassification };
+        }),
+      );
+      setEditingClassification(null);
+    } catch (err) {
+      setError(
+        err?.response?.data?.error ||
+          err?.message ||
+          "Không thể cập nhật phân loại.",
+      );
+      setEditingClassification(null);
+      loadStudents();
+    }
+  };
+
+  const handleNoteSave = async (studentId) => {
+    try {
+      await studentApi.updateStudent(studentId, {
+        insights: [noteDraft],
+      });
+      setStudents((prevStudents) =>
+        prevStudents.map((student) => {
+          const id = student.id || student._id;
+          if (id !== studentId) return student;
+          return { ...student, insights: [noteDraft] };
+        }),
+      );
+      setEditingNoteId(null);
+      setNoteDraft("");
+    } catch (err) {
+      setError(
+        err?.response?.data?.error ||
+          err?.message ||
+          "Không thể cập nhật note.",
+      );
+      setEditingNoteId(null);
+      setNoteDraft("");
+      loadStudents();
+    }
+  };
+
+  const handleToggleStudentSelection = (studentId) => {
+    setSelectedStudents((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(studentId)) {
+        newSet.delete(studentId);
+      } else {
+        newSet.add(studentId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllStudents = (selectAll) => {
+    if (selectAll) {
+      const allIds = new Set(students.map((s) => s.id || s._id));
+      setSelectedStudents(allIds);
+    } else {
+      setSelectedStudents(new Set());
+    }
+  };
+
+  const openAssignPanel = async () => {
+    setShowAssignPanel(true);
+    if (users.length === 0) {
+      try {
+        setUsersLoading(true);
+        const data = await authApi.fetchUsers();
+        setUsers(Array.isArray(data) ? data : data.users || []);
+      } catch {
+        setAssignMessage("Không thể tải danh sách người dùng.");
+      } finally {
+        setUsersLoading(false);
+      }
+    }
+  };
+
+  const handleAssignSubmit = async (event) => {
+    event.preventDefault();
+    if (selectedStudents.size === 0) {
+      setAssignMessage("Vui lòng chọn ít nhất một học viên.");
+      return;
+    }
+    if (!assignUserId) {
+      setAssignMessage("Vui lòng chọn người dùng để gán.");
+      return;
+    }
+
+    try {
+      setAssignLoading(true);
+      const result = await studentApi.assignStudentToUser(
+        Array.from(selectedStudents),
+        assignUserId,
+      );
+      setAssignMessage(
+        `${result.stats.modified} học viên đã được gán thành công.`,
+      );
+      setSelectedStudents(new Set());
+      setAssignUserId("");
+      loadStudents();
+      setTimeout(() => {
+        setShowAssignPanel(false);
+        setAssignMessage("");
+      }, 2000);
+    } catch (err) {
+      setAssignMessage(
+        err?.response?.data?.error || err?.message || "Không thể gán học viên.",
+      );
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const handleStepChange = async (studentId, key, value) => {
+    const config = STEP_CONFIG[key];
+    const payload = {
+      key,
+      isDone: true,
+      data: {},
+    };
+
+    if (config?.dateField) {
+      payload.data[config.dateField] = value || null;
+    } else {
+      payload.data.result = value || null;
+    }
+
+    try {
+      await studentApi.updateStep(studentId, payload);
+      setStudents((prevStudents) =>
+        prevStudents.map((student) => {
+          const id = student.id || student._id;
+          if (id !== studentId) return student;
+          // Update the step data in the student
+          const updatedSteps = Array.isArray(student.steps)
+            ? student.steps.map((step) =>
+                step.key === key
+                  ? {
+                      ...step,
+                      data: {
+                        ...step.data,
+                        ...(config?.dateField
+                          ? { [config.dateField]: value }
+                          : { result: value }),
+                      },
+                    }
+                  : step,
+              )
+            : {
+                ...student.steps,
+                [key]: {
+                  ...student.steps[key],
+                  data: {
+                    ...student.steps[key].data,
+                    ...(config?.dateField
+                      ? { [config.dateField]: value }
+                      : { result: value }),
+                  },
+                },
+              };
+          return { ...student, steps: updatedSteps };
+        }),
+      );
+      setEditingStep(null);
+    } catch (err) {
+      setError(
+        err?.response?.data?.error ||
+          err?.message ||
+          "Không thể cập nhật bước.",
+      );
+      setEditingStep(null);
+      loadStudents();
+    }
+  };
+
+  const openAppointmentModal = (student) => {
+    const sid = student.id || student._id;
+    const step = getStep(student, "apointment");
+    const formatted = formatStepInputValue(step?.data?.scheduledAt);
+    const [date, time] = formatted ? formatted.split("T") : ["", ""];
+    setAppointmentModal({
+      open: true,
+      studentId: sid,
+      date: date || "",
+      time: time || "",
+      consultant: step?.data?.consultant || "",
+    });
+  };
+
+  const handleAppointmentSave = async () => {
+    const { studentId, date, time, consultant } = appointmentModal;
+    const scheduledAt = date ? `${date}T${time || "00:00"}` : null;
+
+    try {
+      await studentApi.updateStep(studentId, {
+        key: "apointment",
+        isDone: true,
+        data: { scheduledAt, consultant },
+      });
+      setStudents((prev) =>
+        prev.map((s) => {
+          if ((s.id || s._id) !== studentId) return s;
+          const updatedSteps = Array.isArray(s.steps)
+            ? s.steps.map((step) =>
+                step.key === "apointment"
+                  ? { ...step, data: { ...step.data, scheduledAt, consultant } }
+                  : step,
+              )
+            : {
+                ...s.steps,
+                apointment: {
+                  ...s.steps?.apointment,
+                  data: { ...s.steps?.apointment?.data, scheduledAt, consultant },
+                },
+              };
+          return { ...s, steps: updatedSteps };
+        }),
+      );
+      setAppointmentModal({ open: false, studentId: null, date: "", time: "", consultant: "" });
+    } catch (err) {
+      setError(
+        err?.response?.data?.error || err?.message || "Không thể cập nhật lịch hẹn.",
+      );
+    }
+  };
+
+  const renderStepCell = (student, key) => {
+    return (
+      <StepCell
+        student={student}
+        stepKey={key}
+        editingStep={editingStep}
+        onEditingChange={setEditingStep}
+        onStepChange={handleStepChange}
+      />
+    );
+  };
+
+  const totalPages = pagination.pages || 1;
   const now = new Date();
   const timeStr = now.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
@@ -81,186 +404,618 @@ export default function Students() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
-      {/* Top bar */}
-      <div className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-        <div>
-          <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">
-            CRM: Khách Hàng Tiềm Năng
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Đồng bộ lúc:{" "}
-            <span className="text-blue-500 font-semibold">{timeStr}</span>
-          </p>
-        </div>
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
-            🔍
+      <div className="bg-white border-b border-slate-200 px-6 py-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between sticky top-0 z-10 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">
+              Danh sách học viên
+            </h1>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Đồng bộ lúc:{" "}
+              <span className="text-blue-500 font-semibold">{timeStr}</span>
+            </p>
+          </div>
+          <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full">
+            {pagination.total || students.length} Leads
           </span>
-          <input
-            type="text"
-            placeholder="Tìm tên, SĐT..."
-            value={search}
-            onChange={handleSearch}
-            className="pl-9 pr-4 py-2 rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 w-56 transition"
-          />
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+              🔍
+            </span>
+            <input
+              type="text"
+              placeholder="Tìm tên, SĐT hoặc năm..."
+              value={search}
+              onChange={handleSearch}
+              className="pl-9 pr-4 py-2 rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 w-64 transition"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowCreatePanel((value) => !value)}
+              className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+            >
+              + Thêm học viên
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowImportPanel((value) => !value)}
+              className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Nhập Excel
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-sm overflow-hidden">
-          {/* Table header bar */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <h2 className="font-bold text-slate-800 text-base">
-                Danh sách Khách hàng
-              </h2>
-              <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full">
-                {filtered.length} Leads
-              </span>
-            </div>
-            <button className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition">
-              + Thêm Mới
-            </button>
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        {error && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
           </div>
+        )}
 
-          {/* Scrollable table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[900px]">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  {[
-                    { label: "Họ Tên", cls: "text-slate-600" },
-                    { label: "SĐT", cls: "text-slate-600" },
-                    { label: "Phân Loại", cls: "text-slate-600" },
-                    { label: "Trường", cls: "text-slate-600" },
-                    { label: "Sale Mới", cls: "text-slate-600" },
-                    { label: "Làm Ấm", cls: "text-amber-500 font-bold" },
-                    { label: "Liên hệ Lần 1", cls: "text-teal-600 font-bold" },
-                    { label: "Liên hệ Lần 2", cls: "text-teal-600 font-bold" },
-                    {
-                      label: "Ngày Giờ Hẹn Đến",
-                      cls: "text-red-500 font-bold",
-                    },
-                    { label: "Đã", cls: "text-slate-600" },
-                    { label: "Sửa", cls: "text-slate-600" },
-                  ].map((col) => (
-                    <th
-                      key={col.label}
-                      className={`text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide whitespace-nowrap ${col.cls}`}
-                    >
-                      {col.label}
-                    </th>
+        {showCreatePanel && (
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-base font-bold text-slate-900 mb-4">
+              Tạo học viên mới
+            </h2>
+            <form
+              onSubmit={handleCreateSubmit}
+              className="grid gap-4 lg:grid-cols-3"
+            >
+              <label className="space-y-2 text-sm text-slate-700">
+                Họ tên
+                <input
+                  type="text"
+                  value={newStudent.name}
+                  onChange={(e) =>
+                    setNewStudent((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  placeholder="Nguyễn Văn A"
+                />
+              </label>
+              <label className="space-y-2 text-sm text-slate-700">
+                Số điện thoại
+                <input
+                  type="tel"
+                  value={newStudent.phone}
+                  onChange={(e) =>
+                    setNewStudent((prev) => ({
+                      ...prev,
+                      phone: e.target.value,
+                    }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  placeholder="0987654321"
+                />
+              </label>
+              <label className="space-y-2 text-sm text-slate-700">
+                Trường
+                <input
+                  type="text"
+                  value={newStudent.university}
+                  onChange={(e) =>
+                    setNewStudent((prev) => ({
+                      ...prev,
+                      university: e.target.value,
+                    }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  placeholder="UIT"
+                />
+              </label>
+              <label className="space-y-2 text-sm text-slate-700">
+                Năm
+                <input
+                  type="number"
+                  value={newStudent.year}
+                  onChange={(e) =>
+                    setNewStudent((prev) => ({ ...prev, year: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+              </label>
+              <label className="space-y-2 text-sm text-slate-700">
+                Nhà mạng
+                <select
+                  value={newStudent.mobileCarrier}
+                  onChange={(e) =>
+                    setNewStudent((prev) => ({
+                      ...prev,
+                      mobileCarrier: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                >
+                  <option value="">Chọn nhà mạng</option>
+                  <option value="Viettel">Viettel</option>
+                  <option value="Mobifone">Mobifone</option>
+                  <option value="Vinaphone">Vinaphone</option>
+                  <option value="Vietnamobile">Vietnamobile</option>
+                  <option value="Gmobile">Gmobile</option>
+                </select>
+              </label>
+              <div className="lg:col-span-3 flex items-center gap-3">
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  Lưu học viên
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePanel(false)}
+                  className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {showImportPanel && (
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-base font-bold text-slate-900 mb-4">
+              Import học viên từ Excel
+            </h2>
+            <form
+              onSubmit={handleImportSubmit}
+              className="grid gap-4 lg:grid-cols-[1fr_auto] items-end"
+            >
+              <label className="space-y-2 text-sm text-slate-700">
+                Chọn file Excel
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+                />
+              </label>
+              <button
+                type="submit"
+                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                Nhập file
+              </button>
+              {importMessage && (
+                <div className="lg:col-span-2 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  {importMessage}
+                </div>
+              )}
+            </form>
+          </div>
+        )}
+
+        {showAssignPanel && (
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-base font-bold text-slate-900 mb-4">
+              Gán {selectedStudents.size} học viên cho người dùng
+            </h2>
+            <form
+              onSubmit={handleAssignSubmit}
+              className="grid gap-4 lg:grid-cols-[1fr_auto_auto] items-end"
+            >
+              <label className="space-y-2 text-sm text-slate-700">
+                Chọn người dùng
+                <select
+                  value={assignUserId}
+                  onChange={(e) => setAssignUserId(e.target.value)}
+                  disabled={usersLoading}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
+                >
+                  <option value="">
+                    {usersLoading ? "Đang tải..." : "-- Chọn người dùng --"}
+                  </option>
+                  {users.map((u) => (
+                    <option key={u._id || u.id} value={u._id || u.id}>
+                      {u.name || u.username || u.email}
+                    </option>
                   ))}
+                </select>
+              </label>
+              <button
+                type="submit"
+                disabled={assignLoading}
+                className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {assignLoading ? "Đang gán..." : "Gán ngay"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAssignPanel(false);
+                  setAssignMessage("");
+                }}
+                className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Hủy
+              </button>
+              {assignMessage && (
+                <div className="lg:col-span-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  {assignMessage}
+                </div>
+              )}
+            </form>
+          </div>
+        )}
+
+        <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+          {selectedStudents.size > 0 && (
+            <div className="flex items-center justify-between px-6 py-3 bg-indigo-50 border-b border-indigo-200">
+              <span className="text-sm font-semibold text-indigo-700">
+                Đã chọn {selectedStudents.size} học viên
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={openAssignPanel}
+                  className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  Gán cho người dùng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudents(new Set())}
+                  className="rounded-2xl border border-indigo-300 bg-white px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50"
+                >
+                  Bỏ chọn
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        students.length > 0 &&
+                        selectedStudents.size === students.length
+                      }
+                      onChange={(e) =>
+                        handleSelectAllStudents(e.target.checked)
+                      }
+                      className="rounded border-slate-300"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Họ Tên
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    SĐT
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Nhà mạng
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Phân Loại
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Trường
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Sale Mới
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Làm Ấm
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Liên hệ Lần 1
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Liên hệ Lần 2
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Ngày Giờ Hẹn Đến
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Đã Đến
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Note Vấn đề
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {paginated.length === 0 ? (
+                {loading ? (
                   <tr>
                     <td
-                      colSpan={11}
-                      className="text-center text-slate-400 py-12"
+                      colSpan={12}
+                      className="px-4 py-10 text-center text-slate-500"
                     >
-                      Không tìm thấy khách hàng nào.
+                      Đang tải danh sách...
+                    </td>
+                  </tr>
+                ) : students.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={12}
+                      className="px-4 py-10 text-center text-slate-400"
+                    >
+                      Không tìm thấy học viên.
                     </td>
                   </tr>
                 ) : (
-                  paginated.map((s, idx) => (
-                    <tr
-                      key={s.id}
-                      className={`border-b border-slate-50 hover:bg-indigo-50/40 transition-colors ${
-                        idx % 2 === 0 ? "bg-white" : "bg-slate-50/30"
-                      }`}
-                    >
-                      {/* Họ Tên */}
-                      <td className="px-4 py-3 font-bold text-indigo-700 whitespace-nowrap">
-                        {s.hoTen}
-                      </td>
-                      {/* SĐT */}
-                      <td className="px-4 py-3">
-                        <a
-                          href={`tel:${s.sdt}`}
-                          className="text-blue-500 hover:underline font-medium"
-                        >
-                          {s.sdt}
-                        </a>
-                      </td>
-                      {/* Phân Loại */}
-                      <td className="px-4 py-3">
-                        {s.phanLoai && (
-                          <span
-                            className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${loaiConfig[s.phanLoai]}`}
+                  students.map((student, idx) => {
+                    const classification =
+                      classificationConfig[student.clasification || "0"];
+                    const status = statusConfig[student.status || "active"];
+                    const ownerId = student.ownerUserId;
+                    const ownerUser = users.find(
+                      (u) => (u._id || u.id) === ownerId,
+                    );
+                    const consultantName =
+                      ownerUser?.name ||
+                      ownerUser?.username ||
+                      student.consultant?.name ||
+                      student.saleMoi ||
+                      "-";
+                    const note = Array.isArray(student.insights)
+                      ? student.insights[0] || "-"
+                      : student.insights || "-";
+
+                    return (
+                      <tr
+                        key={student.id || student._id || idx}
+                        className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}
+                      >
+                        <td className="px-4 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedStudents.has(
+                              student.id || student._id,
+                            )}
+                            onChange={() =>
+                              handleToggleStudentSelection(
+                                student.id || student._id,
+                              )
+                            }
+                            className="rounded border-slate-300"
+                          />
+                        </td>
+                        <td className="px-4 py-4 text-slate-800 font-medium whitespace-nowrap">
+                          {student.name || "-"}
+                        </td>
+                        <td className="px-4 py-4 text-blue-500 whitespace-nowrap">
+                          {student.phone || "-"}
+                        </td>
+                        <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                          {student.mobileCarrier || "-"}
+                        </td>
+                        <td className="px-4 py-4">
+                          {editingClassification ===
+                          (student.id || student._id) ? (
+                            <select
+                              value={student.clasification || "0"}
+                              onChange={(e) =>
+                                handleClassificationChange(
+                                  student.id || student._id,
+                                  e.target.value,
+                                )
+                              }
+                              onBlur={() => setEditingClassification(null)}
+                              onFocus={(e) => {
+                                setTimeout(() => e.currentTarget.click(), 0);
+                              }}
+                              autoFocus
+                              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            >
+                              <option value="0">Chưa phân loại</option>
+                              <option value="1">Loại 1</option>
+                              <option value="2">Loại 2</option>
+                              <option value="3">Loại 3</option>
+                            </select>
+                          ) : (
+                            <span
+                              onClick={() =>
+                                setEditingClassification(
+                                  student.id || student._id,
+                                )
+                              }
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-lg border cursor-pointer hover:bg-opacity-80 transition ${classification.className}`}
+                            >
+                              {classification.label}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-slate-600 whitespace-nowrap">
+                          {student.university || "-"}
+                        </td>
+                        <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                          {consultantName}
+                        </td>
+                        <td className="px-4 py-4">
+                          {renderStepCell(student, "warm")}
+                        </td>
+                        <td className="px-4 py-4">
+                          {renderStepCell(student, "call1")}
+                        </td>
+                        <td className="px-4 py-4">
+                          {renderStepCell(student, "call2")}
+                        </td>
+                        <td className="px-4 py-4">
+                          <button
+                            type="button"
+                            onClick={() => openAppointmentModal(student)}
+                            className="w-full text-left rounded-2xl border border-transparent px-2 py-2 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                           >
-                            {s.phanLoai}
+                            {formatStepSummary(student, "apointment")}
+                          </button>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span
+                            className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${status.className}`}
+                          >
+                            {status.label}
                           </span>
-                        )}
-                      </td>
-                      {/* Trường */}
-                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                        {s.truong}
-                      </td>
-                      {/* Sale Mới */}
-                      <td className="px-4 py-3 text-slate-600">{s.saleMoi}</td>
-                      {/* Làm Ấm */}
-                      <td className="px-4 py-3 text-amber-600 font-medium">
-                        {s.lamAm}
-                      </td>
-                      {/* Liên hệ 1 */}
-                      <td className="px-4 py-3 text-teal-600 font-medium">
-                        {s.lienHe1}
-                      </td>
-                      {/* Liên hệ 2 */}
-                      <td className="px-4 py-3 text-teal-600 font-medium">
-                        {s.lienHe2}
-                      </td>
-                      {/* Ngày Hẹn */}
-                      <td className="px-4 py-3 font-bold text-red-500 whitespace-nowrap">
-                        {s.ngayHen}
-                      </td>
-                      {/* Đã */}
-                      <td className="px-4 py-3 text-slate-600 font-medium">
-                        {s.da}
-                      </td>
-                      {/* Sửa */}
-                      <td className="px-4 py-3">
-                        <button
-                          className="text-lg hover:scale-110 transition-transform"
-                          title="Sửa"
-                        >
-                          📝
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-4 py-4 text-slate-700 max-w-xs">
+                          {editingNoteId === (student.id || student._id) ? (
+                            <div className="space-y-2">
+                              <textarea
+                                value={noteDraft}
+                                onChange={(e) => setNoteDraft(e.target.value)}
+                                rows={4}
+                                className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                                placeholder="Nhập note vấn đề..."
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleNoteSave(student.id || student._id)
+                                  }
+                                  className="rounded-2xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                                >
+                                  Lưu
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingNoteId(null);
+                                    setNoteDraft("");
+                                  }}
+                                  className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                                >
+                                  Hủy
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => {
+                                setEditingNoteId(student.id || student._id);
+                                setNoteDraft(note === "-" ? "" : note);
+                              }}
+                              className="cursor-pointer max-w-xs overflow-hidden text-ellipsis whitespace-pre-line rounded-2xl border border-transparent px-2 py-2 hover:border-slate-300 hover:bg-slate-50"
+                            >
+                              {note || "-"}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
+        </div>
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100">
-            <span className="text-sm text-slate-500">
-              Trang <span className="font-bold text-slate-700">{page}</span> /{" "}
-              {totalPages}
+        <div className="flex flex-col gap-3 justify-between md:flex-row md:items-center">
+          <div className="text-sm text-slate-500">
+            Tổng:{" "}
+            <span className="font-semibold text-slate-700">
+              {pagination.total || 0}
+            </span>{" "}
+            học viên
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={page === 1}
+              className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Trước
+            </button>
+            <span className="text-sm text-slate-600">
+              {page} / {totalPages}
             </span>
-            <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+              disabled={page === totalPages}
+              className="rounded-2xl border border-indigo-300 bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Sau
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {appointmentModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
+            <h2 className="text-base font-bold text-slate-900 mb-5">
+              Đặt lịch hẹn
+            </h2>
+            <div className="space-y-4">
+              <label className="block space-y-2 text-sm text-slate-700">
+                Ngày hẹn
+                <input
+                  type="date"
+                  value={appointmentModal.date}
+                  onChange={(e) =>
+                    setAppointmentModal((prev) => ({ ...prev, date: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+              </label>
+              <label className="block space-y-2 text-sm text-slate-700">
+                Giờ hẹn
+                <input
+                  type="time"
+                  value={appointmentModal.time}
+                  onChange={(e) =>
+                    setAppointmentModal((prev) => ({ ...prev, time: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+              </label>
+              <label className="block space-y-2 text-sm text-slate-700">
+                Tư vấn viên
+                <select
+                  value={appointmentModal.consultant}
+                  onChange={(e) =>
+                    setAppointmentModal((prev) => ({ ...prev, consultant: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
+                >
+                  <option value="">-- Chọn tư vấn viên --</option>
+                  {users.map((u) => (
+                    <option key={u._id || u.id} value={u._id || u.id}>
+                      {u.name || u.username || u.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="mt-6 flex gap-3">
               <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-4 py-1.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                type="button"
+                onClick={handleAppointmentSave}
+                className="flex-1 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
               >
-                Trước
+                Lưu
               </button>
               <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-4 py-1.5 rounded-lg border border-indigo-300 bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                type="button"
+                onClick={() =>
+                  setAppointmentModal({ open: false, studentId: null, date: "", time: "", consultant: "" })
+                }
+                className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                Sau
+                Hủy
               </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
