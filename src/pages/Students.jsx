@@ -1,7 +1,9 @@
-﻿import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { studentApi } from "../services/students";
 import { authApi } from "../services/auth";
+import { getUser } from "../hooks/useAuth";
 import StepCell from "../components/StepCell";
+import FilterDropdown from "../components/FilterDropdown";
 import {
   classificationConfig,
   statusConfig,
@@ -14,6 +16,9 @@ import {
 } from "../utils/studentHelpers";
 
 export default function Students() {
+  const currentUser = getUser();
+  const isAdmin = currentUser?.role === "admin";
+
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [limit] = useState(80);
@@ -48,6 +53,8 @@ export default function Students() {
     time: "",
     consultant: "",
   });
+  const [filters, setFilters] = useState({});
+  const [openFilterCol, setOpenFilterCol] = useState(null);
   const [newStudent, setNewStudent] = useState({
     name: "",
     phone: "",
@@ -57,6 +64,59 @@ export default function Students() {
   });
 
   console.log(students);
+
+  const toggleFilter = (col, value) => {
+    setFilters((prev) => {
+      const current = prev[col] || [];
+      const updated = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
+      return { ...prev, [col]: updated };
+    });
+    setPage(1);
+  };
+
+  const clearFilter = (col) => {
+    setFilters((prev) => ({ ...prev, [col]: [] }));
+    setPage(1);
+  };
+
+  const activeFilterCount = Object.values(filters).reduce(
+    (sum, arr) => sum + (arr?.length || 0),
+    0,
+  );
+
+  const filterOptions = useMemo(() => {
+    const unique = (arr) => [...new Set(arr.filter(Boolean))];
+    return {
+      mobileCarrier: unique(students.map((s) => s.mobileCarrier)).map((v) => ({
+        value: v,
+        label: v,
+      })),
+      clasification: Object.entries(classificationConfig).map(([value, cfg]) => ({
+        value,
+        label: cfg.label,
+      })),
+      university: unique(students.map((s) => s.university)).map((v) => ({
+        value: v,
+        label: v,
+      })),
+      ownerUserId: unique(students.map((s) => s.ownerUserId)).map((id) => {
+        const u = users.find((x) => (x._id || x.id) === id);
+        return { value: id, label: u?.name || u?.username || id };
+      }),
+    };
+  }, [students, users]);
+
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      if (filters.mobileCarrier?.length && !filters.mobileCarrier.includes(s.mobileCarrier)) return false;
+      if (filters.clasification?.length && !filters.clasification.includes(s.clasification || "0")) return false;
+      if (filters.university?.length && !filters.university.includes(s.university)) return false;
+      if (filters.ownerUserId?.length && !filters.ownerUserId.includes(s.ownerUserId)) return false;
+      return true;
+    });
+  }, [students, filters]);
 
   const loadStudents = useCallback(async () => {
     try {
@@ -148,51 +208,49 @@ export default function Students() {
   };
 
   const handleClassificationChange = async (studentId, newClassification) => {
+    setStudents((prevStudents) =>
+      prevStudents.map((student) => {
+        const id = student.id || student._id;
+        if (id !== studentId) return student;
+        return { ...student, clasification: newClassification };
+      }),
+    );
+    setEditingClassification(null);
     try {
       await studentApi.updateStudent(studentId, {
         clasification: newClassification,
       });
-      setStudents((prevStudents) =>
-        prevStudents.map((student) => {
-          const id = student.id || student._id;
-          if (id !== studentId) return student;
-          return { ...student, clasification: newClassification };
-        }),
-      );
-      setEditingClassification(null);
     } catch (err) {
       setError(
         err?.response?.data?.error ||
           err?.message ||
           "Không thể cập nhật phân loại.",
       );
-      setEditingClassification(null);
       loadStudents();
     }
   };
 
   const handleNoteSave = async (studentId) => {
+    const draft = noteDraft;
+    setStudents((prevStudents) =>
+      prevStudents.map((student) => {
+        const id = student.id || student._id;
+        if (id !== studentId) return student;
+        return { ...student, insights: [draft] };
+      }),
+    );
+    setEditingNoteId(null);
+    setNoteDraft("");
     try {
       await studentApi.updateStudent(studentId, {
-        insights: [noteDraft],
+        insights: [draft],
       });
-      setStudents((prevStudents) =>
-        prevStudents.map((student) => {
-          const id = student.id || student._id;
-          if (id !== studentId) return student;
-          return { ...student, insights: [noteDraft] };
-        }),
-      );
-      setEditingNoteId(null);
-      setNoteDraft("");
     } catch (err) {
       setError(
         err?.response?.data?.error ||
           err?.message ||
           "Không thể cập nhật note.",
       );
-      setEditingNoteId(null);
-      setNoteDraft("");
       loadStudents();
     }
   };
@@ -283,50 +341,48 @@ export default function Students() {
       payload.data.result = value || null;
     }
 
+    setStudents((prevStudents) =>
+      prevStudents.map((student) => {
+        const id = student.id || student._id;
+        if (id !== studentId) return student;
+        const updatedSteps = Array.isArray(student.steps)
+          ? student.steps.map((step) =>
+              step.key === key
+                ? {
+                    ...step,
+                    data: {
+                      ...step.data,
+                      ...(config?.dateField
+                        ? { [config.dateField]: value }
+                        : { result: value }),
+                    },
+                  }
+                : step,
+            )
+          : {
+              ...student.steps,
+              [key]: {
+                ...student.steps[key],
+                data: {
+                  ...student.steps[key].data,
+                  ...(config?.dateField
+                    ? { [config.dateField]: value }
+                    : { result: value }),
+                },
+              },
+            };
+        return { ...student, steps: updatedSteps };
+      }),
+    );
+    setEditingStep(null);
     try {
       await studentApi.updateStep(studentId, payload);
-      setStudents((prevStudents) =>
-        prevStudents.map((student) => {
-          const id = student.id || student._id;
-          if (id !== studentId) return student;
-          // Update the step data in the student
-          const updatedSteps = Array.isArray(student.steps)
-            ? student.steps.map((step) =>
-                step.key === key
-                  ? {
-                      ...step,
-                      data: {
-                        ...step.data,
-                        ...(config?.dateField
-                          ? { [config.dateField]: value }
-                          : { result: value }),
-                      },
-                    }
-                  : step,
-              )
-            : {
-                ...student.steps,
-                [key]: {
-                  ...student.steps[key],
-                  data: {
-                    ...student.steps[key].data,
-                    ...(config?.dateField
-                      ? { [config.dateField]: value }
-                      : { result: value }),
-                  },
-                },
-              };
-          return { ...student, steps: updatedSteps };
-        }),
-      );
-      setEditingStep(null);
     } catch (err) {
       setError(
         err?.response?.data?.error ||
           err?.message ||
           "Không thể cập nhật bước.",
       );
-      setEditingStep(null);
       loadStudents();
     }
   };
@@ -349,36 +405,37 @@ export default function Students() {
     const { studentId, date, time, consultant } = appointmentModal;
     const scheduledAt = date ? `${date}T${time || "00:00"}` : null;
 
+    setStudents((prev) =>
+      prev.map((s) => {
+        if ((s.id || s._id) !== studentId) return s;
+        const updatedSteps = Array.isArray(s.steps)
+          ? s.steps.map((step) =>
+              step.key === "apointment"
+                ? { ...step, data: { ...step.data, scheduledAt, consultant } }
+                : step,
+            )
+          : {
+              ...s.steps,
+              apointment: {
+                ...s.steps?.apointment,
+                data: { ...s.steps?.apointment?.data, scheduledAt, consultant },
+              },
+            };
+        return { ...s, steps: updatedSteps };
+      }),
+    );
+    setAppointmentModal({ open: false, studentId: null, date: "", time: "", consultant: "" });
     try {
       await studentApi.updateStep(studentId, {
         key: "apointment",
         isDone: true,
         data: { scheduledAt, consultant },
       });
-      setStudents((prev) =>
-        prev.map((s) => {
-          if ((s.id || s._id) !== studentId) return s;
-          const updatedSteps = Array.isArray(s.steps)
-            ? s.steps.map((step) =>
-                step.key === "apointment"
-                  ? { ...step, data: { ...step.data, scheduledAt, consultant } }
-                  : step,
-              )
-            : {
-                ...s.steps,
-                apointment: {
-                  ...s.steps?.apointment,
-                  data: { ...s.steps?.apointment?.data, scheduledAt, consultant },
-                },
-              };
-          return { ...s, steps: updatedSteps };
-        }),
-      );
-      setAppointmentModal({ open: false, studentId: null, date: "", time: "", consultant: "" });
     } catch (err) {
       setError(
         err?.response?.data?.error || err?.message || "Không thể cập nhật lịch hẹn.",
       );
+      loadStudents();
     }
   };
 
@@ -441,21 +498,36 @@ export default function Students() {
             >
               + Thêm học viên
             </button>
-            <button
-              type="button"
-              onClick={() => setShowImportPanel((value) => !value)}
-              className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              Nhập Excel
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowImportPanel((value) => !value)}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Nhập Excel
+              </button>
+            )}
           </div>
         </div>
       </div>
 
+      {openFilterCol && (
+        <div className="fixed inset-0 z-20" onClick={() => setOpenFilterCol(null)} />
+      )}
+
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
-        {error && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
+        {activeFilterCount > 0 && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-slate-500">
+              Đang lọc: <span className="font-semibold text-indigo-600">{activeFilterCount} điều kiện</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => { setFilters({}); setPage(1); }}
+              className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-500 hover:bg-red-100 transition"
+            >
+              Xóa tất cả bộ lọc
+            </button>
           </div>
         )}
 
@@ -656,13 +728,15 @@ export default function Students() {
                 Đã chọn {selectedStudents.size} học viên
               </span>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={openAssignPanel}
-                  className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
-                >
-                  Gán cho người dùng
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={openAssignPanel}
+                    className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                  >
+                    Gán cho người dùng
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setSelectedStudents(new Set())}
@@ -696,18 +770,36 @@ export default function Students() {
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">
                     SĐT
                   </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
-                    Nhà mạng
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
-                    Phân Loại
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
-                    Trường
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
-                    Sale Mới
-                  </th>
+                  {[
+                    { col: "mobileCarrier", label: "Nhà mạng" },
+                    { col: "clasification", label: "Phân Loại" },
+                    { col: "university", label: "Trường" },
+                    { col: "ownerUserId", label: "Sale Mới" },
+                  ].map(({ col, label }) => (
+                    <th key={col} className="px-4 py-3 text-left font-semibold text-slate-600 relative">
+                      <button
+                        type="button"
+                        onClick={() => setOpenFilterCol(openFilterCol === col ? null : col)}
+                        className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
+                      >
+                        {label}
+                        {filters[col]?.length > 0 && (
+                          <span className="bg-indigo-600 text-white text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
+                            {filters[col].length}
+                          </span>
+                        )}
+                        <span className="text-xs opacity-50">▾</span>
+                      </button>
+                      {openFilterCol === col && (
+                        <FilterDropdown
+                          options={filterOptions[col] || []}
+                          selected={filters[col] || []}
+                          onToggle={(value) => toggleFilter(col, value)}
+                          onClear={() => clearFilter(col)}
+                        />
+                      )}
+                    </th>
+                  ))}
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">
                     Làm Ấm
                   </th>
@@ -721,6 +813,9 @@ export default function Students() {
                     Ngày Giờ Hẹn Đến
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                    Tư Vấn Viên
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
                     Đã Đến
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">
@@ -732,23 +827,23 @@ export default function Students() {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={12}
+                      colSpan={13}
                       className="px-4 py-10 text-center text-slate-500"
                     >
                       Đang tải danh sách...
                     </td>
                   </tr>
-                ) : students.length === 0 ? (
+                ) : filteredStudents.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={12}
+                      colSpan={13}
                       className="px-4 py-10 text-center text-slate-400"
                     >
                       Không tìm thấy học viên.
                     </td>
                   </tr>
                 ) : (
-                  students.map((student, idx) => {
+                  filteredStudents.map((student, idx) => {
                     const classification =
                       classificationConfig[student.clasification || "0"];
                     const status = statusConfig[student.status || "active"];
@@ -854,6 +949,14 @@ export default function Students() {
                             {formatStepSummary(student, "apointment")}
                           </button>
                         </td>
+                        <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                          {(() => {
+                            const apStep = getStep(student, "apointment");
+                            const cId = apStep?.data?.consultant;
+                            const cUser = users.find((u) => (u._id || u.id) === cId);
+                            return cUser?.name || cUser?.username || "-";
+                          })()}
+                        </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           <span
                             className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${status.className}`}
@@ -947,6 +1050,30 @@ export default function Students() {
           </div>
         </div>
       </div>
+
+      {error && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setError("")}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 text-red-500 text-xl">⚠️</span>
+              <p className="flex-1 text-sm text-slate-800">{error}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setError("")}
+              className="mt-5 w-full rounded-2xl bg-red-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-600"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
 
       {appointmentModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
