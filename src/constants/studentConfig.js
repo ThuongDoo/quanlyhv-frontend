@@ -33,6 +33,7 @@ export const STEP_CONFIG = {
   warm: {
     label: "Làm ấm",
     resultOptions: [
+      { value: "null", label: "-" },
       { value: "da_xem", label: "Đã xem" },
       { value: "da_tra_loi", label: "Đã trả lời" },
       { value: "khong_phan_hoi", label: "Không phản hồi" },
@@ -42,6 +43,7 @@ export const STEP_CONFIG = {
   call1: {
     label: "Liên hệ lần 1",
     resultOptions: [
+      { value: "null", label: "-" },
       { value: "nhiet_tinh", label: "Nhiệt tình" },
       { value: "binh_thuong", label: "Bình thường" },
       { value: "tu_choi", label: "Từ chối" },
@@ -51,14 +53,22 @@ export const STEP_CONFIG = {
   call2: {
     label: "Liên hệ lần 2",
     resultOptions: [
+      { value: "null", label: "-" },
       { value: "hen_goi_lai", label: "Hẹn gọi lại" },
       { value: "khong_nghe_may", label: "Không nghe máy" },
       { value: "tu_choi", label: "Từ chối" },
     ],
     hasNote: true,
   },
-  apointment: {
-    label: "Đặt lịch hẹn",
-    dateField: "scheduledAt",
+  call3: {
+    label: "Liên hệ lần 3",
+    resultOptions: [
+      { value: "null", label: "-" },
+
+      { value: "hen_goi_lai", label: "Hẹn gọi lại" },
+      { value: "khong_nghe_may", label: "Không nghe máy" },
+      { value: "tu_choi", label: "Từ chối" },
+    ],
+    hasNote: true,
   },
 };

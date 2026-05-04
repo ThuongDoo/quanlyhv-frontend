@@ -24,7 +24,7 @@ export const formatDate = (value) => {
 
 export const formatStepSummary = (student, key) => {
   const step = getStep(student, key);
-  if (!step?.data) return "Chưa cập nhật";
+  if (!step?.data) return "-";
 
   const config = STEP_CONFIG[key];
   if (!config) return "-";
@@ -39,7 +39,7 @@ export const formatStepSummary = (student, key) => {
   )?.label;
   const noteLabel = data.note ? ` • ${data.note}` : "";
 
-  return resultLabel ? `${resultLabel}${noteLabel}` : "Chưa cập nhật";
+  return resultLabel ? `${resultLabel}${noteLabel}` : "-";
 };
 
 export const formatStepInputValue = (value) => {

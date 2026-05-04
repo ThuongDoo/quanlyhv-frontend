@@ -9,11 +9,14 @@ import {
   statusConfig,
   STEP_CONFIG,
 } from "../constants/studentConfig";
-import {
-  formatStepSummary,
-  formatStepInputValue,
-  getStep,
-} from "../utils/studentHelpers";
+
+const MOBILE_CARRIER_OPTIONS = [
+  { value: "viettel", label: "Viettel" },
+  { value: "mobifone", label: "Mobifone" },
+  { value: "vinaphone", label: "Vinaphone" },
+  { value: "vietnamobile", label: "Vietnamobile" },
+  { value: "other", label: "Khác" },
+];
 
 export default function Students() {
   const currentUser = getUser();
@@ -27,7 +30,7 @@ export default function Students() {
     page: 1,
     limit: 80,
     total: 0,
-    pages: 1,
+    totalPages: 1,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -46,15 +49,16 @@ export default function Students() {
   const [assignLoading, setAssignLoading] = useState(false);
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
-  const [appointmentModal, setAppointmentModal] = useState({
+  const [universities, setUniversities] = useState([]);
+  const [filters, setFilters] = useState({});
+  const [openFilterCol, setOpenFilterCol] = useState(null);
+  const [scheduleModal, setScheduleModal] = useState({
     open: false,
     studentId: null,
     date: "",
     time: "",
-    consultant: "",
+    consultantId: "",
   });
-  const [filters, setFilters] = useState({});
-  const [openFilterCol, setOpenFilterCol] = useState(null);
   const [newStudent, setNewStudent] = useState({
     name: "",
     phone: "",
@@ -62,8 +66,6 @@ export default function Students() {
     mobileCarrier: "",
     university: "",
   });
-
-  console.log(students);
 
   const toggleFilter = (col, value) => {
     setFilters((prev) => {
@@ -89,40 +91,54 @@ export default function Students() {
   const filterOptions = useMemo(() => {
     const unique = (arr) => [...new Set(arr.filter(Boolean))];
     return {
-      mobileCarrier: unique(students.map((s) => s.mobileCarrier)).map((v) => ({ value: v, label: v })),
-      clasification: Object.entries(classificationConfig).map(([value, cfg]) => ({ value, label: cfg.label })),
-      university: unique(students.map((s) => s.university)).map((v) => ({ value: v, label: v })),
+      mobileCarrier: MOBILE_CARRIER_OPTIONS,
+      clasification: Object.entries(classificationConfig).map(
+        ([value, cfg]) => ({ value, label: cfg.label }),
+      ),
+      university: universities.map((v) => ({ value: v, label: v })),
       ownerUserId: unique(students.map((s) => s.ownerUserId)).map((id) => {
         const u = users.find((x) => (x._id || x.id) === id);
         return { value: id, label: u?.name || u?.username || id };
       }),
-      consultant: users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
-      status: Object.entries(statusConfig).map(([value, cfg]) => ({ value, label: cfg.label })),
-      currentStepKey: Object.entries(STEP_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label })),
+      consultant: users.map((u) => ({
+        value: u._id || u.id,
+        label: u.name || u.username || u.email,
+      })),
+      status: Object.entries(statusConfig).map(([value, cfg]) => ({
+        value,
+        label: cfg.label,
+      })),
+      currentStepKey: Object.entries(STEP_CONFIG).map(([value, cfg]) => ({
+        value,
+        label: cfg.label,
+      })),
     };
-  }, [students, users]);
+  }, [students, users, universities]);
 
   // Only clasification is filtered client-side (backend doesn't support it).
   // All other filters are sent as query params to the API.
   const filteredStudents = useMemo(() => {
     if (!filters.clasification?.length) return students;
-    return students.filter((s) => filters.clasification.includes(s.clasification || "0"));
+    return students.filter((s) =>
+      filters.clasification.includes(s.clasification || "0"),
+    );
   }, [students, filters.clasification]);
 
   const loadStudents = useCallback(async () => {
     try {
       setLoading(true);
       const params = { page, limit, search };
-      if (filters.mobileCarrier?.length) params.mobileCarrier = filters.mobileCarrier;
+      if (filters.mobileCarrier?.length)
+        params.mobileCarrier = filters.mobileCarrier;
       if (filters.university?.length) params.university = filters.university;
       if (filters.ownerUserId?.length) params.ownerUserId = filters.ownerUserId;
-      if (filters.consultant?.length) params.consultant = filters.consultant;
       if (filters.status?.length) params.status = filters.status;
-      if (filters.currentStepKey?.length) params.currentStepKey = filters.currentStepKey[0];
+      if (filters.currentStepKey?.length)
+        params.currentStepKey = filters.currentStepKey[0] ?? "null";
       const response = await studentApi.fetchStudents(params);
 
       setStudents(response.students || []);
-      setPagination(response.pagination || { page, limit, total: 0, pages: 1 });
+      setPagination(response.pagination || { page, limit, total: 0, totalPages: 1 });
       setError("");
     } catch (err) {
       setError(
@@ -145,6 +161,16 @@ export default function Students() {
       .fetchUsers()
       .then((data) => {
         setUsers(Array.isArray(data) ? data : data.users || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    studentApi
+      .fetchUniversities()
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data.universities || [];
+        setUniversities(list);
       })
       .catch(() => {});
   }, []);
@@ -190,11 +216,7 @@ export default function Students() {
     }
 
     try {
-      console.log(" send data");
-
       const response = await studentApi.importStudents(importFile);
-      console.log("complete");
-
       setImportMessage(response.message || "Import hoàn tất.");
       setImportFile(null);
       loadStudents();
@@ -385,54 +407,21 @@ export default function Students() {
     }
   };
 
-  const openAppointmentModal = (student) => {
-    const sid = student.id || student._id;
-    const step = getStep(student, "apointment");
-    const formatted = formatStepInputValue(step?.data?.scheduledAt);
-    const [date, time] = formatted ? formatted.split("T") : ["", ""];
-    setAppointmentModal({
-      open: true,
-      studentId: sid,
-      date: date || "",
-      time: time || "",
-      consultant: step?.data?.consultant || "",
-    });
-  };
-
-  const handleAppointmentSave = async () => {
-    const { studentId, date, time, consultant } = appointmentModal;
+  const handleScheduleSave = async () => {
+    const { studentId, date, time, consultantId } = scheduleModal;
     const scheduledAt = date ? `${date}T${time || "00:00"}` : null;
-
     setStudents((prev) =>
-      prev.map((s) => {
-        if ((s.id || s._id) !== studentId) return s;
-        const updatedSteps = Array.isArray(s.steps)
-          ? s.steps.map((step) =>
-              step.key === "apointment"
-                ? { ...step, data: { ...step.data, scheduledAt, consultant } }
-                : step,
-            )
-          : {
-              ...s.steps,
-              apointment: {
-                ...s.steps?.apointment,
-                data: { ...s.steps?.apointment?.data, scheduledAt, consultant },
-              },
-            };
-        return { ...s, steps: updatedSteps };
-      }),
+      prev.map((s) =>
+        (s.id || s._id) === studentId
+          ? { ...s, consultant: consultantId, scheduledAt }
+          : s,
+      ),
     );
-    setAppointmentModal({ open: false, studentId: null, date: "", time: "", consultant: "" });
+    setScheduleModal({ open: false, studentId: null, date: "", time: "", consultantId: "" });
     try {
-      await studentApi.updateStep(studentId, {
-        key: "apointment",
-        isDone: true,
-        data: { scheduledAt, consultant },
-      });
+      await studentApi.scheduleStudent(studentId, { consultantId, scheduledAt });
     } catch (err) {
-      setError(
-        err?.response?.data?.error || err?.message || "Không thể cập nhật lịch hẹn.",
-      );
+      setError(err?.response?.data?.error || err?.message || "Không thể đặt lịch hẹn.");
       loadStudents();
     }
   };
@@ -449,7 +438,7 @@ export default function Students() {
     );
   };
 
-  const totalPages = pagination.pages || 1;
+  const totalPages = pagination.totalPages || 1;
   const now = new Date();
   const timeStr = now.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
@@ -510,20 +499,36 @@ export default function Students() {
       </div>
 
       {openFilterCol && (
-        <div className="fixed inset-0 z-20" onClick={() => setOpenFilterCol(null)} />
+        <div
+          className="fixed inset-0 z-20"
+          onClick={() => setOpenFilterCol(null)}
+        />
       )}
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Bước hiện tại:</span>
-          {[{ value: "", label: "Tất cả" }, ...Object.entries(STEP_CONFIG).map(([v, c]) => ({ value: v, label: c.label }))].map(({ value, label }) => {
-            const active = value === (filters.currentStepKey?.[0] || "");
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            Bước hiện tại:
+          </span>
+          {[
+            { value: "", label: "Tất cả" },
+            { value: null, label: "Chưa xử lý" },
+            ...Object.entries(STEP_CONFIG).map(([v, c]) => ({
+              value: v,
+              label: c.label,
+            })),
+          ].map(({ value, label }) => {
+            const current = filters.currentStepKey?.length ? filters.currentStepKey[0] : "";
+            const active = current === value;
             return (
               <button
-                key={value}
+                key={value ?? "__null__"}
                 type="button"
                 onClick={() => {
-                  setFilters((prev) => ({ ...prev, currentStepKey: value ? [value] : [] }));
+                  setFilters((prev) => ({
+                    ...prev,
+                    currentStepKey: value === "" ? [] : [value],
+                  }));
                   setPage(1);
                 }}
                 className={`rounded-full px-3 py-1 text-xs font-semibold transition border ${active ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"}`}
@@ -535,7 +540,10 @@ export default function Students() {
           {activeFilterCount > 0 && (
             <button
               type="button"
-              onClick={() => { setFilters({}); setPage(1); }}
+              onClick={() => {
+                setFilters({});
+                setPage(1);
+              }}
               className="ml-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-500 hover:bg-red-100 transition"
             >
               Xóa tất cả ({activeFilterCount})
@@ -760,10 +768,10 @@ export default function Students() {
             </div>
           )}
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="w-full table-fixed text-sm">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
-                  <th className="px-4 py-3 text-center">
+                  <th className="w-10 px-4 py-3 text-center">
                     <input
                       type="checkbox"
                       checked={
@@ -776,22 +784,30 @@ export default function Students() {
                       className="rounded border-slate-300"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600">
                     Họ Tên
                   </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                  <th className="w-32 px-4 py-3 text-left font-semibold text-slate-600">
                     SĐT
                   </th>
+                  <th className="w-16 px-4 py-3 text-left font-semibold text-slate-600">
+                    Năm
+                  </th>
                   {[
-                    { col: "mobileCarrier", label: "Nhà mạng" },
-                    { col: "clasification", label: "Phân Loại" },
-                    { col: "university", label: "Trường" },
-                    { col: "ownerUserId", label: "Sale Mới" },
-                  ].map(({ col, label }) => (
-                    <th key={col} className="px-4 py-3 text-left font-semibold text-slate-600 relative">
+                    { col: "mobileCarrier", label: "Nhà mạng", width: "w-28" },
+                    { col: "clasification", label: "Phân Loại", width: "w-28" },
+                    { col: "university", label: "Trường", width: "w-44" },
+                    { col: "ownerUserId", label: "Sale Mới", width: "w-32" },
+                  ].map(({ col, label, width }) => (
+                    <th
+                      key={col}
+                      className={`${width} px-4 py-3 text-left font-semibold text-slate-600 relative`}
+                    >
                       <button
                         type="button"
-                        onClick={() => setOpenFilterCol(openFilterCol === col ? null : col)}
+                        onClick={() =>
+                          setOpenFilterCol(openFilterCol === col ? null : col)
+                        }
                         className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
                       >
                         {label}
@@ -812,26 +828,33 @@ export default function Students() {
                       )}
                     </th>
                   ))}
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Làm Ấm
                   </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Liên hệ Lần 1
                   </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Liên hệ Lần 2
                   </th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
-                    Ngày Giờ Hẹn Đến
+                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
+                    Liên hệ Lần 3
+                  </th>
+                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
+                    Lịch hẹn
                   </th>
                   {[
-                    { col: "consultant", label: "Tư Vấn Viên" },
-                    { col: "status", label: "Đã Đến" },
-                  ].map(({ col, label }) => (
-                    <th key={col} className="px-4 py-3 text-left font-semibold text-slate-600 relative">
+                    { col: "status", label: "Đã Đến", width: "w-28" },
+                  ].map(({ col, label, width }) => (
+                    <th
+                      key={col}
+                      className={`${width} px-4 py-3 text-left font-semibold text-slate-600 relative`}
+                    >
                       <button
                         type="button"
-                        onClick={() => setOpenFilterCol(openFilterCol === col ? null : col)}
+                        onClick={() =>
+                          setOpenFilterCol(openFilterCol === col ? null : col)
+                        }
                         className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
                       >
                         {label}
@@ -852,7 +875,7 @@ export default function Students() {
                       )}
                     </th>
                   ))}
-                  <th className="px-4 py-3 text-left font-semibold text-slate-600">
+                  <th className="w-52 px-4 py-3 text-left font-semibold text-slate-600">
                     Note Vấn đề
                   </th>
                 </tr>
@@ -861,7 +884,7 @@ export default function Students() {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={13}
+                      colSpan={14}
                       className="px-4 py-10 text-center text-slate-500"
                     >
                       Đang tải danh sách...
@@ -870,7 +893,7 @@ export default function Students() {
                 ) : filteredStudents.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={13}
+                      colSpan={14}
                       className="px-4 py-10 text-center text-slate-400"
                     >
                       Không tìm thấy học viên.
@@ -919,6 +942,9 @@ export default function Students() {
                         </td>
                         <td className="px-4 py-4 text-blue-500 whitespace-nowrap">
                           {student.phone || "-"}
+                        </td>
+                        <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                          {student.year || "-"}
                         </td>
                         <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
                           {student.mobileCarrier || "-"}
@@ -975,21 +1001,31 @@ export default function Students() {
                           {renderStepCell(student, "call2")}
                         </td>
                         <td className="px-4 py-4">
+                          {renderStepCell(student, "call3")}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <button
                             type="button"
-                            onClick={() => openAppointmentModal(student)}
-                            className="w-full text-left rounded-2xl border border-transparent px-2 py-2 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                            onClick={() => {
+                              const sid = student.id || student._id;
+                              const raw = student.scheduledAt;
+                              const d = raw ? new Date(raw) : null;
+                              const date = d ? d.toISOString().slice(0, 10) : "";
+                              const time = d ? d.toISOString().slice(11, 16) : "";
+                              setScheduleModal({
+                                open: true,
+                                studentId: sid,
+                                date,
+                                time,
+                                consultantId: student.consultant || "",
+                              });
+                            }}
+                            className="w-full text-left rounded-2xl border border-transparent px-2 py-1.5 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition"
                           >
-                            {formatStepSummary(student, "apointment")}
+                            {student.scheduledAt
+                              ? new Date(student.scheduledAt).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })
+                              : <span className="text-slate-400 text-xs">Chưa đặt</span>}
                           </button>
-                        </td>
-                        <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
-                          {(() => {
-                            const apStep = getStep(student, "apointment");
-                            const cId = apStep?.data?.consultant;
-                            const cUser = users.find((u) => (u._id || u.id) === cId);
-                            return cUser?.name || cUser?.username || "-";
-                          })()}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           <span
@@ -1053,7 +1089,15 @@ export default function Students() {
 
         <div className="flex flex-col gap-3 justify-between md:flex-row md:items-center">
           <div className="text-sm text-slate-500">
-            Tổng:{" "}
+            Hiển thị{" "}
+            <span className="font-semibold text-slate-700">
+              {pagination.total === 0 ? 0 : (page - 1) * limit + 1}
+            </span>
+            {" – "}
+            <span className="font-semibold text-slate-700">
+              {Math.min(page * limit, pagination.total || 0)}
+            </span>
+            {" / "}
             <span className="font-semibold text-slate-700">
               {pagination.total || 0}
             </span>{" "}
@@ -1062,24 +1106,38 @@ export default function Students() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => setPage(1)}
+              disabled={page === 1}
+              className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              «
+            </button>
+            <button
+              type="button"
               onClick={() => setPage((current) => Math.max(1, current - 1))}
               disabled={page === 1}
               className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Trước
             </button>
-            <span className="text-sm text-slate-600">
-              {page} / {totalPages}
+            <span className="text-sm text-slate-600 px-1">
+              Trang <span className="font-semibold text-slate-800">{page}</span> / {totalPages}
             </span>
             <button
               type="button"
-              onClick={() =>
-                setPage((current) => Math.min(totalPages, current + 1))
-              }
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
               disabled={page === totalPages}
               className="rounded-2xl border border-indigo-300 bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Sau
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage(totalPages)}
+              disabled={page === totalPages}
+              className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              »
             </button>
           </div>
         </div>
@@ -1109,21 +1167,23 @@ export default function Students() {
         </div>
       )}
 
-      {appointmentModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
-            <h2 className="text-base font-bold text-slate-900 mb-5">
-              Đặt lịch hẹn
-            </h2>
+      {scheduleModal.open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setScheduleModal({ open: false, studentId: null, date: "", time: "", consultantId: "" })}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-bold text-slate-900 mb-5">Đặt lịch hẹn</h2>
             <div className="space-y-4">
               <label className="block space-y-2 text-sm text-slate-700">
                 Ngày hẹn
                 <input
                   type="date"
-                  value={appointmentModal.date}
-                  onChange={(e) =>
-                    setAppointmentModal((prev) => ({ ...prev, date: e.target.value }))
-                  }
+                  value={scheduleModal.date}
+                  onChange={(e) => setScheduleModal((prev) => ({ ...prev, date: e.target.value }))}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                 />
               </label>
@@ -1131,20 +1191,16 @@ export default function Students() {
                 Giờ hẹn
                 <input
                   type="time"
-                  value={appointmentModal.time}
-                  onChange={(e) =>
-                    setAppointmentModal((prev) => ({ ...prev, time: e.target.value }))
-                  }
+                  value={scheduleModal.time}
+                  onChange={(e) => setScheduleModal((prev) => ({ ...prev, time: e.target.value }))}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                 />
               </label>
               <label className="block space-y-2 text-sm text-slate-700">
                 Tư vấn viên
                 <select
-                  value={appointmentModal.consultant}
-                  onChange={(e) =>
-                    setAppointmentModal((prev) => ({ ...prev, consultant: e.target.value }))
-                  }
+                  value={scheduleModal.consultantId}
+                  onChange={(e) => setScheduleModal((prev) => ({ ...prev, consultantId: e.target.value }))}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
                 >
                   <option value="">-- Chọn tư vấn viên --</option>
@@ -1159,16 +1215,14 @@ export default function Students() {
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                onClick={handleAppointmentSave}
+                onClick={handleScheduleSave}
                 className="flex-1 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
               >
                 Lưu
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  setAppointmentModal({ open: false, studentId: null, date: "", time: "", consultant: "" })
-                }
+                onClick={() => setScheduleModal({ open: false, studentId: null, date: "", time: "", consultantId: "" })}
                 className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Hủy

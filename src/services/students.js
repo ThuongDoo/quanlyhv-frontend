@@ -5,6 +5,10 @@ export const studentApi = {
     return api.get("/students", { params });
   },
 
+  fetchUniversities() {
+    return api.get("/students/universities");
+  },
+
   fetchStudent(studentId) {
     return api.get(`/students/${studentId}`);
   },
@@ -19,6 +23,10 @@ export const studentApi = {
 
   updateStep(studentId, payload) {
     return api.patch(`/students/${studentId}/step`, payload);
+  },
+
+  scheduleStudent(studentId, payload) {
+    return api.patch(`/students/${studentId}/schedule`, payload);
   },
 
   deleteStep(studentId, stepKey) {

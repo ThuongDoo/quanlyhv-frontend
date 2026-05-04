@@ -53,7 +53,6 @@ export default function StepCell({
         onBlur={() => onEditingChange(null)}
         className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
       >
-        <option value="">Chọn kết quả</option>
         {config?.resultOptions?.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

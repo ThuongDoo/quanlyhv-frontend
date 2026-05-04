@@ -8,6 +8,17 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  paramsSerializer: (params) => {
+    const parts = [];
+    for (const [key, value] of Object.entries(params)) {
+      if (Array.isArray(value)) {
+        for (const v of value) parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v)}`);
+      } else if (value !== undefined && value !== null) {
+        parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+      }
+    }
+    return parts.join("&");
+  },
 });
 
 api.interceptors.request.use((config) => {
