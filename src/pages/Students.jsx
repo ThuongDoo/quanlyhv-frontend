@@ -22,6 +22,7 @@ export default function Students() {
   const currentUser = getUser();
   const isAdmin = currentUser?.role === "admin";
 
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [limit] = useState(80);
@@ -175,9 +176,16 @@ export default function Students() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const handleSearch = (event) => {
-    setSearch(event.target.value);
-    setPage(1);
+    setSearchInput(event.target.value);
   };
 
   const handleCreateSubmit = async (event) => {
@@ -472,10 +480,19 @@ export default function Students() {
             <input
               type="text"
               placeholder="Tìm tên, SĐT hoặc năm..."
-              value={search}
+              value={searchInput}
               onChange={handleSearch}
-              className="pl-9 pr-4 py-2 rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 w-64 transition"
+              className="pl-9 pr-8 py-2 rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 w-64 transition"
             />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => setSearchInput("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
+              >
+                ✕
+              </button>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -655,91 +672,6 @@ export default function Students() {
           </div>
         )}
 
-        {showImportPanel && (
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900 mb-4">
-              Import học viên từ Excel
-            </h2>
-            <form
-              onSubmit={handleImportSubmit}
-              className="grid gap-4 lg:grid-cols-[1fr_auto] items-end"
-            >
-              <label className="space-y-2 text-sm text-slate-700">
-                Chọn file Excel
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
-                />
-              </label>
-              <button
-                type="submit"
-                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
-              >
-                Nhập file
-              </button>
-              {importMessage && (
-                <div className="lg:col-span-2 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  {importMessage}
-                </div>
-              )}
-            </form>
-          </div>
-        )}
-
-        {showAssignPanel && (
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900 mb-4">
-              Gán {selectedStudents.size} học viên cho người dùng
-            </h2>
-            <form
-              onSubmit={handleAssignSubmit}
-              className="grid gap-4 lg:grid-cols-[1fr_auto_auto] items-end"
-            >
-              <label className="space-y-2 text-sm text-slate-700">
-                Chọn người dùng
-                <select
-                  value={assignUserId}
-                  onChange={(e) => setAssignUserId(e.target.value)}
-                  disabled={usersLoading}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
-                >
-                  <option value="">
-                    {usersLoading ? "Đang tải..." : "-- Chọn người dùng --"}
-                  </option>
-                  {users.map((u) => (
-                    <option key={u._id || u.id} value={u._id || u.id}>
-                      {u.name || u.username || u.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="submit"
-                disabled={assignLoading}
-                className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {assignLoading ? "Đang gán..." : "Gán ngay"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAssignPanel(false);
-                  setAssignMessage("");
-                }}
-                className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              >
-                Hủy
-              </button>
-              {assignMessage && (
-                <div className="lg:col-span-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  {assignMessage}
-                </div>
-              )}
-            </form>
-          </div>
-        )}
 
         <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
           {selectedStudents.size > 0 && (
@@ -1228,6 +1160,108 @@ export default function Students() {
                 Hủy
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showImportPanel && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => { setShowImportPanel(false); setImportMessage(""); }}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-bold text-slate-900 mb-5">Import học viên từ Excel</h2>
+            <form onSubmit={handleImportSubmit} className="space-y-4">
+              <label className="block space-y-2 text-sm text-slate-700">
+                Chọn file Excel
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+                />
+              </label>
+              {importMessage && (
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  {importMessage}
+                </div>
+              )}
+              <div className="flex gap-3 mt-2">
+                <button
+                  type="submit"
+                  className="flex-1 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  Nhập file
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowImportPanel(false); setImportMessage(""); }}
+                  className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAssignPanel && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => { setShowAssignPanel(false); setAssignMessage(""); }}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-bold text-slate-900 mb-5">
+              Gán {selectedStudents.size} học viên cho người dùng
+            </h2>
+            <form onSubmit={handleAssignSubmit} className="space-y-4">
+              <label className="space-y-2 text-sm text-slate-700">
+                Chọn người dùng
+                <select
+                  value={assignUserId}
+                  onChange={(e) => setAssignUserId(e.target.value)}
+                  disabled={usersLoading}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
+                >
+                  <option value="">
+                    {usersLoading ? "Đang tải..." : "-- Chọn người dùng --"}
+                  </option>
+                  {users.map((u) => (
+                    <option key={u._id || u.id} value={u._id || u.id}>
+                      {u.name || u.username || u.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {assignMessage && (
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  {assignMessage}
+                </div>
+              )}
+              <div className="flex gap-3 mt-2">
+                <button
+                  type="submit"
+                  disabled={assignLoading}
+                  className="flex-1 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {assignLoading ? "Đang gán..." : "Gán ngay"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowAssignPanel(false); setAssignMessage(""); }}
+                  className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
