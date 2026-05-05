@@ -13,7 +13,7 @@ export const classificationConfig = {
   },
   3: {
     label: "LOẠI 3: KHÓ",
-    className: "bg-slate-100 text-slate-600 border-slate-200",
+    className: "bg-blue-100 text-blue-700 border-blue-200",
   },
 };
 

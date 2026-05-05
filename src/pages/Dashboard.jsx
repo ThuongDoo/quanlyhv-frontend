@@ -4,6 +4,7 @@ import { authApi } from "../services/auth";
 import { useDebounce } from "../hooks/useDebounce";
 import StudentCard from "../components/StudentCard";
 import SearchInput from "../components/SearchInput";
+import Pagination from "../components/Pagination";
 import { classificationConfig, statusConfig } from "../constants/studentConfig";
 
 function toDateInput(date) {
@@ -15,6 +16,9 @@ export default function Dashboard() {
 
   const [students, setStudents] = useState([]);
   const [users, setUsers] = useState([]);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
   const [loading, setLoading] = useState(false);
   const [scheduledAtFrom, setScheduledAtFrom] = useState(today);
   const [scheduledAtTo, setScheduledAtTo] = useState("");
@@ -32,19 +36,20 @@ export default function Dashboard() {
   const loadStudents = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { limit: 200 };
+      const params = { page, limit };
       if (scheduledAtFrom) params.scheduledAtFrom = scheduledAtFrom;
       if (scheduledAtTo) params.scheduledAtTo = scheduledAtTo;
       if (selectedClassification !== "") params.clasification = selectedClassification;
       if (selectedStatus !== "") params.status = selectedStatus;
       const response = await studentApi.fetchStudents(params);
       setStudents(response.students || []);
+      setPagination(response.pagination || { total: 0, totalPages: 1 });
     } catch {
       // silent
     } finally {
       setLoading(false);
     }
-  }, [scheduledAtFrom, scheduledAtTo, selectedClassification, selectedStatus]);
+  }, [page, limit, scheduledAtFrom, scheduledAtTo, selectedClassification, selectedStatus]);
 
   useEffect(() => {
     loadStudents();
@@ -85,14 +90,14 @@ export default function Dashboard() {
               <input
                 type="date"
                 value={scheduledAtFrom}
-                onChange={(e) => setScheduledAtFrom(e.target.value)}
+                onChange={(e) => { setScheduledAtFrom(e.target.value); setPage(1); }}
                 className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
               <label className="font-medium shrink-0 text-xs">Đến</label>
               <input
                 type="date"
                 value={scheduledAtTo}
-                onChange={(e) => setScheduledAtTo(e.target.value)}
+                onChange={(e) => { setScheduledAtTo(e.target.value); setPage(1); }}
                 className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
             </div>
@@ -112,7 +117,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">Phân loại</span>
             <button
-              onClick={() => setSelectedClassification("")}
+              onClick={() => { setSelectedClassification(""); setPage(1); }}
               className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border transition ${selectedClassification === "" ? "bg-slate-700 text-white border-slate-700" : "bg-white text-slate-500 border-slate-300 hover:border-slate-400"}`}
             >
               Tất cả
@@ -122,7 +127,7 @@ export default function Dashboard() {
               return (
                 <button
                   key={key}
-                  onClick={() => setSelectedClassification(active ? "" : key)}
+                  onClick={() => { setSelectedClassification(active ? "" : key); setPage(1); }}
                   className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border transition ${active ? cfg.className : "bg-white text-slate-400 border-slate-200 hover:border-slate-300"}`}
                 >
                   {cfg.label}
@@ -137,7 +142,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">Trạng thái</span>
             <button
-              onClick={() => setSelectedStatus("")}
+              onClick={() => { setSelectedStatus(""); setPage(1); }}
               className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border transition ${selectedStatus === "" ? "bg-slate-700 text-white border-slate-700" : "bg-white text-slate-500 border-slate-300 hover:border-slate-400"}`}
             >
               Tất cả
@@ -147,7 +152,7 @@ export default function Dashboard() {
               return (
                 <button
                   key={key}
-                  onClick={() => setSelectedStatus(active ? "" : key)}
+                  onClick={() => { setSelectedStatus(active ? "" : key); setPage(1); }}
                   className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border transition ${active ? cfg.className : "bg-white text-slate-400 border-slate-200 hover:border-slate-300"}`}
                 >
                   {cfg.label}
@@ -168,12 +173,19 @@ export default function Dashboard() {
             Không tìm thấy học sinh nào.
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map((s) => (
                 <StudentCard key={s._id || s.id} student={s} users={users} />
               ))}
             </div>
+            <Pagination
+              page={page}
+              totalPages={pagination.totalPages || 1}
+              total={pagination.total || 0}
+              limit={limit}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </div>

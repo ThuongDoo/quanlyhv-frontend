@@ -5,6 +5,7 @@ import { authApi } from "../services/auth";
 import { getUser } from "../hooks/useAuth";
 import StepCell from "../components/StepCell";
 import SearchInput from "../components/SearchInput";
+import Pagination from "../components/Pagination";
 import FilterDropdown from "../components/FilterDropdown";
 import {
   classificationConfig,
@@ -1029,63 +1030,13 @@ export default function Students() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 justify-between md:flex-row md:items-center">
-          <div className="text-sm text-slate-500">
-            Hiển thị{" "}
-            <span className="font-semibold text-slate-700">
-              {pagination.total === 0 ? 0 : (page - 1) * limit + 1}
-            </span>
-            {" – "}
-            <span className="font-semibold text-slate-700">
-              {Math.min(page * limit, pagination.total || 0)}
-            </span>
-            {" / "}
-            <span className="font-semibold text-slate-700">
-              {pagination.total || 0}
-            </span>{" "}
-            học viên
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage(1)}
-              disabled={page === 1}
-              className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              «
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-              disabled={page === 1}
-              className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Trước
-            </button>
-            <span className="text-sm text-slate-600 px-1">
-              Trang <span className="font-semibold text-slate-800">{page}</span>{" "}
-              / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() =>
-                setPage((current) => Math.min(totalPages, current + 1))
-              }
-              disabled={page === totalPages}
-              className="rounded-2xl border border-indigo-300 bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Sau
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage(totalPages)}
-              disabled={page === totalPages}
-              className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              »
-            </button>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={pagination.total || 0}
+          limit={limit}
+          onPageChange={setPage}
+        />
       </div>
 
       {error && (
