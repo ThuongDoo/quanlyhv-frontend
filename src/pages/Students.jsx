@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useDebounce } from "../hooks/useDebounce";
 import { studentApi } from "../services/students";
 import { authApi } from "../services/auth";
 import { getUser } from "../hooks/useAuth";
@@ -23,7 +24,7 @@ export default function Students() {
   const isAdmin = currentUser?.role === "admin";
 
   const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const search = useDebounce(searchInput);
   const [page, setPage] = useState(1);
   const [limit] = useState(80);
   const [students, setStudents] = useState([]);
@@ -35,6 +36,7 @@ export default function Students() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [pendingReload, setPendingReload] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [importFile, setImportFile] = useState(null);
@@ -139,7 +141,9 @@ export default function Students() {
       const response = await studentApi.fetchStudents(params);
 
       setStudents(response.students || []);
-      setPagination(response.pagination || { page, limit, total: 0, totalPages: 1 });
+      setPagination(
+        response.pagination || { page, limit, total: 0, totalPages: 1 },
+      );
       setError("");
     } catch (err) {
       setError(
@@ -177,12 +181,8 @@ export default function Students() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearch(searchInput);
-      setPage(1);
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
+    setPage(1);
+  }, [search]);
 
   const handleSearch = (event) => {
     setSearchInput(event.target.value);
@@ -254,7 +254,7 @@ export default function Students() {
           err?.message ||
           "Không thể cập nhật phân loại.",
       );
-      loadStudents();
+      setPendingReload(true);
     }
   };
 
@@ -279,7 +279,7 @@ export default function Students() {
           err?.message ||
           "Không thể cập nhật note.",
       );
-      loadStudents();
+      setPendingReload(true);
     }
   };
 
@@ -373,30 +373,27 @@ export default function Students() {
       prevStudents.map((student) => {
         const id = student.id || student._id;
         if (id !== studentId) return student;
+        const newData = config?.dateField
+          ? { [config.dateField]: value }
+          : { result: value };
         const updatedSteps = Array.isArray(student.steps)
-          ? student.steps.map((step) =>
-              step.key === key
-                ? {
-                    ...step,
-                    data: {
-                      ...step.data,
-                      ...(config?.dateField
-                        ? { [config.dateField]: value }
-                        : { result: value }),
-                    },
-                  }
-                : step,
-            )
+          ? student.steps.some((s) => s.key === key)
+            ? student.steps.map((step) =>
+                step.key === key
+                  ? {
+                      ...step,
+                      isDone: true,
+                      data: { ...step.data, ...newData },
+                    }
+                  : step,
+              )
+            : [...student.steps, { key, isDone: true, data: newData }]
           : {
               ...student.steps,
               [key]: {
-                ...student.steps[key],
-                data: {
-                  ...student.steps[key].data,
-                  ...(config?.dateField
-                    ? { [config.dateField]: value }
-                    : { result: value }),
-                },
+                ...student.steps?.[key],
+                isDone: true,
+                data: { ...student.steps?.[key]?.data, ...newData },
               },
             };
         return { ...student, steps: updatedSteps };
@@ -411,7 +408,7 @@ export default function Students() {
           err?.message ||
           "Không thể cập nhật bước.",
       );
-      loadStudents();
+      setPendingReload(true);
     }
   };
 
@@ -425,12 +422,23 @@ export default function Students() {
           : s,
       ),
     );
-    setScheduleModal({ open: false, studentId: null, date: "", time: "", consultantId: "" });
+    setScheduleModal({
+      open: false,
+      studentId: null,
+      date: "",
+      time: "",
+      consultantId: "",
+    });
     try {
-      await studentApi.scheduleStudent(studentId, { consultantId, scheduledAt });
+      await studentApi.scheduleStudent(studentId, {
+        consultantId,
+        scheduledAt,
+      });
     } catch (err) {
-      setError(err?.response?.data?.error || err?.message || "Không thể đặt lịch hẹn.");
-      loadStudents();
+      setError(
+        err?.response?.data?.error || err?.message || "Không thể đặt lịch hẹn.",
+      );
+      setPendingReload(true);
     }
   };
 
@@ -535,7 +543,9 @@ export default function Students() {
               label: c.label,
             })),
           ].map(({ value, label }) => {
-            const current = filters.currentStepKey?.length ? filters.currentStepKey[0] : "";
+            const current = filters.currentStepKey?.length
+              ? filters.currentStepKey[0]
+              : "";
             const active = current === value;
             return (
               <button
@@ -672,7 +682,6 @@ export default function Students() {
           </div>
         )}
 
-
         <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
           {selectedStudents.size > 0 && (
             <div className="flex items-center justify-between px-6 py-3 bg-indigo-50 border-b border-indigo-200">
@@ -775,38 +784,38 @@ export default function Students() {
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Lịch hẹn
                   </th>
-                  {[
-                    { col: "status", label: "Đã Đến", width: "w-28" },
-                  ].map(({ col, label, width }) => (
-                    <th
-                      key={col}
-                      className={`${width} px-4 py-3 text-left font-semibold text-slate-600 relative`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOpenFilterCol(openFilterCol === col ? null : col)
-                        }
-                        className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
+                  {[{ col: "status", label: "Đã Đến", width: "w-28" }].map(
+                    ({ col, label, width }) => (
+                      <th
+                        key={col}
+                        className={`${width} px-4 py-3 text-left font-semibold text-slate-600 relative`}
                       >
-                        {label}
-                        {filters[col]?.length > 0 && (
-                          <span className="bg-indigo-600 text-white text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
-                            {filters[col].length}
-                          </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenFilterCol(openFilterCol === col ? null : col)
+                          }
+                          className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
+                        >
+                          {label}
+                          {filters[col]?.length > 0 && (
+                            <span className="bg-indigo-600 text-white text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
+                              {filters[col].length}
+                            </span>
+                          )}
+                          <span className="text-xs opacity-50">▾</span>
+                        </button>
+                        {openFilterCol === col && (
+                          <FilterDropdown
+                            options={filterOptions[col] || []}
+                            selected={filters[col] || []}
+                            onToggle={(value) => toggleFilter(col, value)}
+                            onClear={() => clearFilter(col)}
+                          />
                         )}
-                        <span className="text-xs opacity-50">▾</span>
-                      </button>
-                      {openFilterCol === col && (
-                        <FilterDropdown
-                          options={filterOptions[col] || []}
-                          selected={filters[col] || []}
-                          onToggle={(value) => toggleFilter(col, value)}
-                          onClear={() => clearFilter(col)}
-                        />
-                      )}
-                    </th>
-                  ))}
+                      </th>
+                    ),
+                  )}
                   <th className="w-52 px-4 py-3 text-left font-semibold text-slate-600">
                     Note Vấn đề
                   </th>
@@ -894,7 +903,8 @@ export default function Students() {
                               }
                               onBlur={() => setEditingClassification(null)}
                               onFocus={(e) => {
-                                setTimeout(() => e.currentTarget.click(), 0);
+                                const el = e.currentTarget;
+                                setTimeout(() => el?.click(), 0);
                               }}
                               autoFocus
                               className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -942,21 +952,36 @@ export default function Students() {
                               const sid = student.id || student._id;
                               const raw = student.scheduledAt;
                               const d = raw ? new Date(raw) : null;
-                              const date = d ? d.toISOString().slice(0, 10) : "";
-                              const time = d ? d.toISOString().slice(11, 16) : "";
+                              const date = d
+                                ? d.toISOString().slice(0, 10)
+                                : "";
+                              const time = d
+                                ? d.toISOString().slice(11, 16)
+                                : "";
                               setScheduleModal({
                                 open: true,
                                 studentId: sid,
                                 date,
                                 time,
-                                consultantId: student.consultant || "",
+                                consultantId:
+                                  student.consultant?._id ||
+                                  student.consultant?.id ||
+                                  student.consultant ||
+                                  "",
                               });
                             }}
                             className="w-full text-left rounded-2xl border border-transparent px-2 py-1.5 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition"
                           >
-                            {student.scheduledAt
-                              ? new Date(student.scheduledAt).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })
-                              : <span className="text-slate-400 text-xs">Chưa đặt</span>}
+                            {student.scheduledAt ? (
+                              new Date(student.scheduledAt).toLocaleString(
+                                "vi-VN",
+                                { dateStyle: "short", timeStyle: "short" },
+                              )
+                            ) : (
+                              <span className="text-slate-400 text-xs">
+                                Chưa đặt
+                              </span>
+                            )}
                           </button>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
@@ -966,49 +991,21 @@ export default function Students() {
                             {status.label}
                           </span>
                         </td>
-                        <td className="px-4 py-4 text-slate-700 max-w-xs">
-                          {editingNoteId === (student.id || student._id) ? (
-                            <div className="space-y-2">
-                              <textarea
-                                value={noteDraft}
-                                onChange={(e) => setNoteDraft(e.target.value)}
-                                rows={4}
-                                className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                                placeholder="Nhập note vấn đề..."
-                              />
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleNoteSave(student.id || student._id)
-                                  }
-                                  className="rounded-2xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700"
-                                >
-                                  Lưu
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingNoteId(null);
-                                    setNoteDraft("");
-                                  }}
-                                  className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                                >
-                                  Hủy
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div
-                              onClick={() => {
-                                setEditingNoteId(student.id || student._id);
-                                setNoteDraft(note === "-" ? "" : note);
-                              }}
-                              className="cursor-pointer max-w-xs overflow-hidden text-ellipsis whitespace-pre-line rounded-2xl border border-transparent px-2 py-2 hover:border-slate-300 hover:bg-slate-50"
-                            >
-                              {note || "-"}
-                            </div>
-                          )}
+                        <td className="px-4 py-4 text-slate-700">
+                          <div
+                            onClick={() => {
+                              setEditingNoteId(student.id || student._id);
+                              setNoteDraft(note === "-" ? "" : note);
+                            }}
+                            className="cursor-pointer truncate rounded-2xl border border-transparent px-2 py-2 text-sm hover:border-slate-300 hover:bg-slate-50 transition"
+                            title={note !== "-" ? note : undefined}
+                          >
+                            {note !== "-" ? (
+                              note
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1053,11 +1050,14 @@ export default function Students() {
               Trước
             </button>
             <span className="text-sm text-slate-600 px-1">
-              Trang <span className="font-semibold text-slate-800">{page}</span> / {totalPages}
+              Trang <span className="font-semibold text-slate-800">{page}</span>{" "}
+              / {totalPages}
             </span>
             <button
               type="button"
-              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
               disabled={page === totalPages}
               className="rounded-2xl border border-indigo-300 bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -1076,10 +1076,7 @@ export default function Students() {
       </div>
 
       {error && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setError("")}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div
             className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
@@ -1090,7 +1087,13 @@ export default function Students() {
             </div>
             <button
               type="button"
-              onClick={() => setError("")}
+              onClick={() => {
+                setError("");
+                if (pendingReload) {
+                  setPendingReload(false);
+                  loadStudents();
+                }
+              }}
               className="mt-5 w-full rounded-2xl bg-red-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-600"
             >
               Đóng
@@ -1102,20 +1105,35 @@ export default function Students() {
       {scheduleModal.open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setScheduleModal({ open: false, studentId: null, date: "", time: "", consultantId: "" })}
+          onClick={() =>
+            setScheduleModal({
+              open: false,
+              studentId: null,
+              date: "",
+              time: "",
+              consultantId: "",
+            })
+          }
         >
           <div
             className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-base font-bold text-slate-900 mb-5">Đặt lịch hẹn</h2>
+            <h2 className="text-base font-bold text-slate-900 mb-5">
+              Đặt lịch hẹn
+            </h2>
             <div className="space-y-4">
               <label className="block space-y-2 text-sm text-slate-700">
                 Ngày hẹn
                 <input
                   type="date"
                   value={scheduleModal.date}
-                  onChange={(e) => setScheduleModal((prev) => ({ ...prev, date: e.target.value }))}
+                  onChange={(e) =>
+                    setScheduleModal((prev) => ({
+                      ...prev,
+                      date: e.target.value,
+                    }))
+                  }
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                 />
               </label>
@@ -1124,7 +1142,12 @@ export default function Students() {
                 <input
                   type="time"
                   value={scheduleModal.time}
-                  onChange={(e) => setScheduleModal((prev) => ({ ...prev, time: e.target.value }))}
+                  onChange={(e) =>
+                    setScheduleModal((prev) => ({
+                      ...prev,
+                      time: e.target.value,
+                    }))
+                  }
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                 />
               </label>
@@ -1132,7 +1155,12 @@ export default function Students() {
                 Tư vấn viên
                 <select
                   value={scheduleModal.consultantId}
-                  onChange={(e) => setScheduleModal((prev) => ({ ...prev, consultantId: e.target.value }))}
+                  onChange={(e) =>
+                    setScheduleModal((prev) => ({
+                      ...prev,
+                      consultantId: e.target.value,
+                    }))
+                  }
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
                 >
                   <option value="">-- Chọn tư vấn viên --</option>
@@ -1154,7 +1182,15 @@ export default function Students() {
               </button>
               <button
                 type="button"
-                onClick={() => setScheduleModal({ open: false, studentId: null, date: "", time: "", consultantId: "" })}
+                onClick={() =>
+                  setScheduleModal({
+                    open: false,
+                    studentId: null,
+                    date: "",
+                    time: "",
+                    consultantId: "",
+                  })
+                }
                 className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Hủy
@@ -1167,13 +1203,18 @@ export default function Students() {
       {showImportPanel && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => { setShowImportPanel(false); setImportMessage(""); }}
+          onClick={() => {
+            setShowImportPanel(false);
+            setImportMessage("");
+          }}
         >
           <div
             className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-base font-bold text-slate-900 mb-5">Import học viên từ Excel</h2>
+            <h2 className="text-base font-bold text-slate-900 mb-5">
+              Import học viên từ Excel
+            </h2>
             <form onSubmit={handleImportSubmit} className="space-y-4">
               <label className="block space-y-2 text-sm text-slate-700">
                 Chọn file Excel
@@ -1198,7 +1239,10 @@ export default function Students() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowImportPanel(false); setImportMessage(""); }}
+                  onClick={() => {
+                    setShowImportPanel(false);
+                    setImportMessage("");
+                  }}
                   className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   Hủy
@@ -1212,7 +1256,10 @@ export default function Students() {
       {showAssignPanel && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => { setShowAssignPanel(false); setAssignMessage(""); }}
+          onClick={() => {
+            setShowAssignPanel(false);
+            setAssignMessage("");
+          }}
         >
           <div
             className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
@@ -1255,13 +1302,62 @@ export default function Students() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowAssignPanel(false); setAssignMessage(""); }}
+                  onClick={() => {
+                    setShowAssignPanel(false);
+                    setAssignMessage("");
+                  }}
                   className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   Hủy
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {editingNoteId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => {
+            setEditingNoteId(null);
+            setNoteDraft("");
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-bold text-slate-900 mb-4">
+              Note vấn đề
+            </h2>
+            <textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              rows={5}
+              autoFocus
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 resize-none"
+              placeholder="Nhập note vấn đề..."
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                type="button"
+                onClick={() => handleNoteSave(editingNoteId)}
+                className="flex-1 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+              >
+                Lưu
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingNoteId(null);
+                  setNoteDraft("");
+                }}
+                className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Hủy
+              </button>
+            </div>
           </div>
         </div>
       )}
