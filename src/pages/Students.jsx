@@ -4,20 +4,15 @@ import { studentApi } from "../services/students";
 import { authApi } from "../services/auth";
 import { getUser } from "../hooks/useAuth";
 import StepCell from "../components/StepCell";
+import SearchInput from "../components/SearchInput";
 import FilterDropdown from "../components/FilterDropdown";
 import {
   classificationConfig,
   statusConfig,
   STEP_CONFIG,
+  MOBILE_CARRIER_OPTIONS,
 } from "../constants/studentConfig";
 
-const MOBILE_CARRIER_OPTIONS = [
-  { value: "viettel", label: "Viettel" },
-  { value: "mobifone", label: "Mobifone" },
-  { value: "vinaphone", label: "Vinaphone" },
-  { value: "vietnamobile", label: "Vietnamobile" },
-  { value: "other", label: "Khác" },
-];
 
 export default function Students() {
   const currentUser = getUser();
@@ -42,6 +37,7 @@ export default function Students() {
   const [importFile, setImportFile] = useState(null);
   const [importMessage, setImportMessage] = useState("");
   const [editingClassification, setEditingClassification] = useState(null);
+  const [editingStatus, setEditingStatus] = useState(null);
   const [editingStep, setEditingStep] = useState(null);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
@@ -184,9 +180,6 @@ export default function Students() {
     setPage(1);
   }, [search]);
 
-  const handleSearch = (event) => {
-    setSearchInput(event.target.value);
-  };
 
   const handleCreateSubmit = async (event) => {
     event.preventDefault();
@@ -254,6 +247,21 @@ export default function Students() {
           err?.message ||
           "Không thể cập nhật phân loại.",
       );
+      setPendingReload(true);
+    }
+  };
+
+  const handleStatusChange = async (studentId, newStatus) => {
+    setStudents((prev) =>
+      prev.map((s) =>
+        (s.id || s._id) === studentId ? { ...s, status: newStatus } : s,
+      ),
+    );
+    setEditingStatus(null);
+    try {
+      await studentApi.updateStudent(studentId, { status: newStatus });
+    } catch (err) {
+      setError(err?.response?.data?.error || err?.message || "Không thể cập nhật trạng thái.");
       setPendingReload(true);
     }
   };
@@ -481,27 +489,12 @@ export default function Students() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
-              🔍
-            </span>
-            <input
-              type="text"
-              placeholder="Tìm tên, SĐT hoặc năm..."
-              value={searchInput}
-              onChange={handleSearch}
-              className="pl-9 pr-8 py-2 rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 w-64 transition"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={() => setSearchInput("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
-              >
-                ✕
-              </button>
-            )}
-          </div>
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="Tìm tên, SĐT hoặc năm..."
+            className="w-64"
+          />
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -844,7 +837,7 @@ export default function Students() {
                   filteredStudents.map((student, idx) => {
                     const classification =
                       classificationConfig[student.clasification || "0"];
-                    const status = statusConfig[student.status || "active"];
+                    const status = statusConfig[student.status] || Object.values(statusConfig)[0];
                     const ownerId = student.ownerUserId;
                     const ownerUser = users.find(
                       (u) => (u._id || u.id) === ownerId,
@@ -909,10 +902,9 @@ export default function Students() {
                               autoFocus
                               className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
                             >
-                              <option value="0">Chưa phân loại</option>
-                              <option value="1">Loại 1</option>
-                              <option value="2">Loại 2</option>
-                              <option value="3">Loại 3</option>
+                              {Object.entries(classificationConfig).map(([key, cfg]) => (
+                                <option key={key} value={key}>{cfg.label}</option>
+                              ))}
                             </select>
                           ) : (
                             <span
@@ -985,11 +977,32 @@ export default function Students() {
                           </button>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
-                          <span
-                            className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${status.className}`}
-                          >
-                            {status.label}
-                          </span>
+                          {editingStatus === (student.id || student._id) ? (
+                            <select
+                              value={student.status || "active"}
+                              onChange={(e) =>
+                                handleStatusChange(student.id || student._id, e.target.value)
+                              }
+                              onBlur={() => setEditingStatus(null)}
+                              onFocus={(e) => {
+                                const el = e.currentTarget;
+                                setTimeout(() => el?.click(), 0);
+                              }}
+                              autoFocus
+                              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            >
+                              {Object.entries(statusConfig).map(([key, cfg]) => (
+                                <option key={key} value={key}>{cfg.label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span
+                              onClick={() => setEditingStatus(student.id || student._id)}
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-lg border cursor-pointer hover:opacity-80 transition ${status.className}`}
+                            >
+                              {status.label}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-4 text-slate-700">
                           <div

@@ -3,6 +3,7 @@ import { studentApi } from "../services/students";
 import { authApi } from "../services/auth";
 import { useDebounce } from "../hooks/useDebounce";
 import StudentCard from "../components/StudentCard";
+import SearchInput from "../components/SearchInput";
 import { classificationConfig, statusConfig } from "../constants/studentConfig";
 
 function toDateInput(date) {
@@ -96,16 +97,12 @@ export default function Dashboard() {
               />
             </div>
 
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-              <input
-                type="text"
-                placeholder="Tìm tên, SĐT..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="pl-9 pr-4 py-1.5 rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 w-44 transition"
-              />
-            </div>
+            <SearchInput
+              value={searchInput}
+              onChange={setSearchInput}
+              placeholder="Tìm tên, SĐT..."
+              className="w-44"
+            />
           </div>
         </div>
 

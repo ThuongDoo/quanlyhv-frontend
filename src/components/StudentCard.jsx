@@ -12,7 +12,7 @@ export default function StudentCard({ student, users = [] }) {
   const [copied, setCopied] = useState(false);
 
   const typeCfg = classificationConfig[student.clasification ?? "0"];
-  const statusCfg = statusConfig[student.status] || statusConfig.active;
+  const statusCfg = statusConfig[student.status] || Object.values(statusConfig)[0];
 
   const insight = Array.isArray(student.insights)
     ? student.insights[0]

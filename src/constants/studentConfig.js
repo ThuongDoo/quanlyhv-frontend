@@ -18,23 +18,28 @@ export const classificationConfig = {
 };
 
 export const statusConfig = {
-  active: {
+  NOT_ARRIVED: {
     label: "CHƯA ĐẾN",
     className: "bg-slate-100 text-slate-700 border-slate-200",
   },
-  lost: {
-    label: "TỪ CHỐI",
-    className: "bg-red-100 text-red-700 border-red-200",
-  },
-  enrolled: {
+
+  ARRIVED: {
     label: "ĐÃ ĐẾN",
     className: "bg-emerald-100 text-emerald-700 border-emerald-200",
   },
-  registered: {
+  REGISTERED: {
     label: "ĐÃ ĐĂNG KÝ",
     className: "bg-blue-100 text-blue-700 border-blue-200",
   },
 };
+
+export const MOBILE_CARRIER_OPTIONS = [
+  { value: "viettel", label: "Viettel" },
+  { value: "mobifone", label: "Mobifone" },
+  { value: "vinaphone", label: "Vinaphone" },
+  { value: "vietnamobile", label: "Vietnamobile" },
+  { value: "other", label: "Khác" },
+];
 
 export const STEP_CONFIG = {
   warm: {
