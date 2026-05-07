@@ -2,6 +2,12 @@ import { createBrowserRouter } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import Dashboard from "../pages/Dashboard";
 import Students from "../pages/Students";
+import ShiftPerformance from "../pages/ShiftPerformance";
+import History from "../pages/History";
+import ReportMonth from "../pages/ReportMonth";
+import ReportWeek from "../pages/ReportWeek";
+import NhanSu from "../pages/NhanSu";
+import QuyHocTap from "../pages/QuyHocTap";
 import Login from "../pages/Login";
 import { RequireAuth } from "../components/RequireAuth";
 
@@ -17,10 +23,12 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", element: <Dashboard /> },
       { path: "/students", element: <Students /> },
-      { path: "/performance", element: <Students /> },
-      { path: "/history", element: <Students /> },
-      { path: "/report-month", element: <Students /> },
-      { path: "/report-week", element: <Students /> },
+      { path: "/performance", element: <ShiftPerformance /> },
+      { path: "/history", element: <History /> },
+      { path: "/report-month", element: <ReportMonth /> },
+      { path: "/report-week", element: <ReportWeek /> },
+      { path: "/nhan-su", element: <NhanSu /> },
+      { path: "/quy-hoc-tap", element: <QuyHocTap /> },
     ],
   },
 ]);

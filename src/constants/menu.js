@@ -5,4 +5,6 @@ export const MENU = [
   { label: "Lịch sử Ca Làm", path: "/history", icon: "📊" },
   { label: "Báo cáo Tháng", path: "/report-month", icon: "📈" },
   { label: "Báo cáo Tuần", path: "/report-week", icon: "📉" },
+  { label: "Nhân sự", path: "/nhan-su", icon: "🧑‍💻" },
+  { label: "Quỹ Học Tập", path: "/quy-hoc-tap", icon: "🏦" },
 ];

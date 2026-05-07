@@ -28,4 +28,7 @@ export const authApi = {
   updateUser(userId, payload) {
     return api.put(`/auth/users/${userId}`, payload);
   },
+  deleteUser(userId) {
+    return api.delete(`/auth/users/${userId}`);
+  },
 };
