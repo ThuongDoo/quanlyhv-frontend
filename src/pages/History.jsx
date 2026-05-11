@@ -23,7 +23,7 @@ export default function History() {
         <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">Lịch sử Ca làm việc</h1>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col gap-6">
+      <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col gap-6">
         {/* Chọn ngày */}
         <div className="flex items-center gap-3">
           <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Ngày</label>

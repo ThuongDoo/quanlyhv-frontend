@@ -31,4 +31,17 @@ export const authApi = {
   deleteUser(userId) {
     return api.delete(`/auth/users/${userId}`);
   },
+  getProfile() {
+    return api.get("/auth/profile");
+  },
+  updateProfile(payload) {
+    return api.put("/auth/profile", payload);
+  },
+  importUsers(file) {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post("/auth/users/import", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
 };

@@ -8,6 +8,7 @@ import ReportMonth from "../pages/ReportMonth";
 import ReportWeek from "../pages/ReportWeek";
 import NhanSu from "../pages/NhanSu";
 import QuyHocTap from "../pages/QuyHocTap";
+import TaiNguyen from "../pages/TaiNguyen";
 import Login from "../pages/Login";
 import { RequireAuth } from "../components/RequireAuth";
 
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: "/report-week", element: <ReportWeek /> },
       { path: "/nhan-su", element: <NhanSu /> },
       { path: "/quy-hoc-tap", element: <QuyHocTap /> },
+      { path: "/tai-nguyen", element: <TaiNguyen /> },
     ],
   },
 ]);

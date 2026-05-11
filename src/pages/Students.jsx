@@ -7,6 +7,7 @@ import StepCell from "../components/StepCell";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import FilterDropdown from "../components/FilterDropdown";
+import ImportExcel from "../components/ImportExcel";
 import {
   classificationConfig,
   statusConfig,
@@ -34,9 +35,6 @@ export default function Students() {
   const [error, setError] = useState("");
   const [pendingReload, setPendingReload] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
-  const [showImportPanel, setShowImportPanel] = useState(false);
-  const [importFile, setImportFile] = useState(null);
-  const [importMessage, setImportMessage] = useState("");
   const [editingClassification, setEditingClassification] = useState(null);
   const [editingStatus, setEditingStatus] = useState(null);
   const [editingStep, setEditingStep] = useState(null);
@@ -206,25 +204,6 @@ export default function Students() {
     } catch (err) {
       setError(
         err?.response?.data?.error || err?.message || "Không thể tạo học viên.",
-      );
-    }
-  };
-
-  const handleImportSubmit = async (event) => {
-    event.preventDefault();
-    if (!importFile) {
-      setImportMessage("Vui lòng chọn file Excel trước khi import.");
-      return;
-    }
-
-    try {
-      const response = await studentApi.importStudents(importFile);
-      setImportMessage(response.message || "Import hoàn tất.");
-      setImportFile(null);
-      loadStudents();
-    } catch (err) {
-      setImportMessage(
-        err?.response?.data?.error || err?.message || "Import thất bại.",
       );
     }
   };
@@ -505,13 +484,10 @@ export default function Students() {
               + Thêm học viên
             </button>
             {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setShowImportPanel((value) => !value)}
-                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              >
-                Nhập Excel
-              </button>
+              <ImportExcel
+                onImport={async (file) => { const res = await studentApi.importStudents(file); loadStudents(); return res; }}
+                label="Nhập Excel"
+              />
             )}
           </div>
         </div>
@@ -1160,59 +1136,6 @@ export default function Students() {
                 Hủy
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {showImportPanel && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => {
-            setShowImportPanel(false);
-            setImportMessage("");
-          }}
-        >
-          <div
-            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-base font-bold text-slate-900 mb-5">
-              Import học viên từ Excel
-            </h2>
-            <form onSubmit={handleImportSubmit} className="space-y-4">
-              <label className="block space-y-2 text-sm text-slate-700">
-                Chọn file Excel
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
-                />
-              </label>
-              {importMessage && (
-                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  {importMessage}
-                </div>
-              )}
-              <div className="flex gap-3 mt-2">
-                <button
-                  type="submit"
-                  className="flex-1 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                >
-                  Nhập file
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowImportPanel(false);
-                    setImportMessage("");
-                  }}
-                  className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  Hủy
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

@@ -7,4 +7,5 @@ export const MENU = [
   { label: "Báo cáo Tuần", path: "/report-week", icon: "📉" },
   { label: "Nhân sự", path: "/nhan-su", icon: "🧑‍💻" },
   { label: "Quỹ Học Tập", path: "/quy-hoc-tap", icon: "🏦" },
+  { label: "Tài nguyên & Link", path: "/tai-nguyen", icon: "🔗" },
 ];

@@ -41,7 +41,7 @@ export default function ReportWeek() {
         </span>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-8 flex flex-col gap-6">
+      <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col gap-6">
         {loading ? (
           <p className="text-center text-slate-400 py-20 text-sm">Đang tải...</p>
         ) : (

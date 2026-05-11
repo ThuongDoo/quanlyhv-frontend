@@ -137,7 +137,7 @@ export default function QuyHocTap() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-6">
         <div className="bg-white rounded-2xl border-2 border-red-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-slate-700">
