@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"d:\\\\code\\\\quanlyhocvien\\\\src\" -Recurse -Name)",
+      "Bash(Select-String -Pattern \"\\(campaign|Campaign\\)\")",
+      "Bash(Get-ChildItem -Path \"d:\\\\code\\\\quanlyhocvien\\\\src\" -Directory)",
+      "Bash(Select-Object Name)"
+    ]
+  }
+}

@@ -94,8 +94,14 @@ export default function MainLayout() {
           </div>
           <div className="flex items-center gap-3">
             {user?.name && (
-              <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                {user.name} • {user.role}
+              <div className={`rounded-full px-3 py-1 text-sm font-medium flex items-center gap-1.5 ${
+                user.role === "admin" ? "bg-red-100 text-red-700" :
+                user.role === "sale" ? "bg-amber-100 text-amber-700" :
+                "bg-blue-100 text-blue-700"
+              }`}>
+                {user.name}
+                <span className="opacity-40">•</span>
+                <span className="font-bold text-xs uppercase">{user.role}</span>
               </div>
             )}
             <button

@@ -20,8 +20,7 @@ export default function Dashboard() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [loading, setLoading] = useState(false);
-  const [scheduledAtFrom, setScheduledAtFrom] = useState(today);
-  const [scheduledAtTo, setScheduledAtTo] = useState("");
+  const [scheduledDate, setScheduledDate] = useState(today);
   const [selectedClassification, setSelectedClassification] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -37,8 +36,10 @@ export default function Dashboard() {
     try {
       setLoading(true);
       const params = { page, limit };
-      if (scheduledAtFrom) params.scheduledAtFrom = scheduledAtFrom;
-      if (scheduledAtTo) params.scheduledAtTo = scheduledAtTo;
+      if (scheduledDate) {
+        params.scheduledAtFrom = `${scheduledDate}T00:00:00+07:00`;
+        params.scheduledAtTo = `${scheduledDate}T23:59:59+07:00`;
+      }
       if (selectedClassification !== "") params.clasification = selectedClassification;
       if (selectedStatus !== "") params.status = selectedStatus;
       const response = await studentApi.fetchStudents(params);
@@ -49,7 +50,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, scheduledAtFrom, scheduledAtTo, selectedClassification, selectedStatus]);
+  }, [page, limit, scheduledDate, selectedClassification, selectedStatus]);
 
   useEffect(() => {
     loadStudents();
@@ -86,18 +87,11 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-sm text-slate-600">
-              <label className="font-medium shrink-0 text-xs">Từ</label>
+              <label className="font-medium shrink-0 text-xs">Ngày</label>
               <input
                 type="date"
-                value={scheduledAtFrom}
-                onChange={(e) => { setScheduledAtFrom(e.target.value); setPage(1); }}
-                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              />
-              <label className="font-medium shrink-0 text-xs">Đến</label>
-              <input
-                type="date"
-                value={scheduledAtTo}
-                onChange={(e) => { setScheduledAtTo(e.target.value); setPage(1); }}
+                value={scheduledDate}
+                onChange={(e) => { setScheduledDate(e.target.value); setPage(1); }}
                 className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
             </div>

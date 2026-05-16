@@ -48,4 +48,7 @@ export const studentApi = {
   assignStudentToUser(studentIds, ownerUserId) {
     return api.patch("/students/assign", { studentIds, ownerUserId });
   },
+  fetchCampaigns() {
+    return api.get("/students/campaigns");
+  },
 };

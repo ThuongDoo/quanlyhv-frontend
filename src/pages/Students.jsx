@@ -1,4 +1,5 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { useDebounce } from "../hooks/useDebounce";
 import { studentApi } from "../services/students";
 import { authApi } from "../services/auth";
@@ -15,6 +16,60 @@ import {
   MOBILE_CARRIER_OPTIONS,
 } from "../constants/studentConfig";
 
+
+function CampaignEditor({ value, campaigns, onSave, onCancel }) {
+  const [draft, setDraft] = useState(value);
+  const filtered = campaigns.filter((c) =>
+    c.toLowerCase().includes(draft.toLowerCase())
+  );
+
+  return (
+    <div className="relative z-30" onClick={(e) => e.stopPropagation()}>
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onSave(draft);
+          if (e.key === "Escape") onCancel();
+        }}
+        placeholder="Nhập hoặc chọn..."
+        className="w-full rounded-lg border border-violet-300 px-2 py-1 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-violet-200"
+      />
+      <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+        {draft && (
+          <button
+            type="button"
+            onMouseDown={() => onSave("")}
+            className="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 border-b border-slate-100"
+          >
+            Xoá chiến dịch
+          </button>
+        )}
+        {filtered.length === 0 && draft ? (
+          <button
+            type="button"
+            onMouseDown={() => onSave(draft)}
+            className="w-full text-left px-3 py-1.5 text-xs text-violet-600 font-semibold hover:bg-violet-50"
+          >
+            + Tạo "{draft}"
+          </button>
+        ) : (
+          filtered.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onMouseDown={() => onSave(c)}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-violet-50 hover:text-violet-700 transition ${c === value ? "font-bold text-violet-600 bg-violet-50" : "text-slate-700"}`}
+            >
+              {c}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Students() {
   const currentUser = getUser();
@@ -37,10 +92,13 @@ export default function Students() {
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [editingClassification, setEditingClassification] = useState(null);
   const [editingStatus, setEditingStatus] = useState(null);
+  const [editingCampaign, setEditingCampaign] = useState(null);
   const [editingStep, setEditingStep] = useState(null);
+  const [editingProcessing, setEditingProcessing] = useState(null); // { id, date, shift }
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [selectedStudents, setSelectedStudents] = useState(new Set());
+  const lastClickedIndex = useRef(null);
   const [showAssignPanel, setShowAssignPanel] = useState(false);
   const [assignUserId, setAssignUserId] = useState("");
   const [assignMessage, setAssignMessage] = useState("");
@@ -48,6 +106,7 @@ export default function Students() {
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [universities, setUniversities] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [filters, setFilters] = useState({});
   const [openFilterCol, setOpenFilterCol] = useState(null);
   const [scheduleModal, setScheduleModal] = useState({
@@ -94,14 +153,18 @@ export default function Students() {
         ([value, cfg]) => ({ value, label: cfg.label }),
       ),
       university: universities.map((v) => ({ value: v, label: v })),
-      ownerUserId: unique(students.map((s) => s.ownerUserId)).map((id) => {
-        const u = users.find((x) => (x._id || x.id) === id);
-        return { value: id, label: u?.name || u?.username || id };
-      }),
-      consultant: users.map((u) => ({
-        value: u._id || u.id,
-        label: u.name || u.username || u.email,
-      })),
+      campaign: [
+        { value: "__empty__", label: "Trống" },
+        ...campaigns.map((c) => ({ value: c, label: c })),
+      ],
+      ownerUserId: [
+        { value: "__empty__", label: "Trống" },
+        ...users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
+      ],
+      consultant: [
+        { value: "__empty__", label: "Trống" },
+        ...users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
+      ],
       status: Object.entries(statusConfig).map(([value, cfg]) => ({
         value,
         label: cfg.label,
@@ -113,14 +176,46 @@ export default function Students() {
     };
   }, [students, users, universities]);
 
-  // Only clasification is filtered client-side (backend doesn't support it).
-  // All other filters are sent as query params to the API.
   const filteredStudents = useMemo(() => {
-    if (!filters.clasification?.length) return students;
-    return students.filter((s) =>
-      filters.clasification.includes(s.clasification || "0"),
-    );
-  }, [students, filters.clasification]);
+    let result = students;
+
+    if (filters.clasification?.length) {
+      result = result.filter((s) => filters.clasification.includes(s.clasification || "0"));
+    }
+
+    if (filters.ownerUserId?.length) {
+      result = result.filter((s) => {
+        const hasEmpty = filters.ownerUserId.includes("__empty__");
+        const ids = filters.ownerUserId.filter((v) => v !== "__empty__");
+        if (hasEmpty && !s.ownerUserId) return true;
+        if (ids.length && ids.includes(s.ownerUserId)) return true;
+        return false;
+      });
+    }
+
+    if (filters.consultant?.length) {
+      result = result.filter((s) => {
+        const cId = s.consultant?._id || s.consultant?.id || (typeof s.consultant === "string" ? s.consultant : null);
+        const hasEmpty = filters.consultant.includes("__empty__");
+        const ids = filters.consultant.filter((v) => v !== "__empty__");
+        if (hasEmpty && !cId) return true;
+        if (ids.length && ids.includes(cId)) return true;
+        return false;
+      });
+    }
+
+    if (filters.campaign?.length) {
+      result = result.filter((s) => {
+        const hasEmpty = filters.campaign.includes("__empty__");
+        const vals = filters.campaign.filter((v) => v !== "__empty__");
+        if (hasEmpty && !s.campaign) return true;
+        if (vals.length && vals.includes(s.campaign)) return true;
+        return false;
+      });
+    }
+
+    return result;
+  }, [students, filters.clasification, filters.ownerUserId, filters.consultant, filters.campaign]);
 
   const loadStudents = useCallback(async () => {
     try {
@@ -129,7 +224,6 @@ export default function Students() {
       if (filters.mobileCarrier?.length)
         params.mobileCarrier = filters.mobileCarrier;
       if (filters.university?.length) params.university = filters.university;
-      if (filters.ownerUserId?.length) params.ownerUserId = filters.ownerUserId;
       if (filters.status?.length) params.status = filters.status;
       if (filters.currentStepKey?.length)
         params.currentStepKey = filters.currentStepKey[0] ?? "null";
@@ -173,6 +267,10 @@ export default function Students() {
         setUniversities(list);
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    studentApi.fetchCampaigns().then((data) => setCampaigns(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -246,6 +344,40 @@ export default function Students() {
     }
   };
 
+  const handleCampaignChange = async (studentId, value) => {
+    const campaign = value.trim() || null;
+    setStudents((prev) =>
+      prev.map((s) => (s.id || s._id) === studentId ? { ...s, campaign } : s)
+    );
+    setEditingCampaign(null);
+    if (!campaigns.includes(campaign) && campaign) {
+      setCampaigns((prev) => [...prev, campaign].sort());
+    }
+    try {
+      await studentApi.updateStudent(studentId, { campaign });
+    } catch (err) {
+      setError(err?.response?.data?.error || "Không thể cập nhật chiến dịch.");
+      setPendingReload(true);
+    }
+  };
+
+  const handleProcessingSave = async () => {
+    if (!editingProcessing) return;
+    const { id, date, shift } = editingProcessing;
+    const processingDate = date || null;
+    const processingShift = shift || null;
+    setStudents((prev) =>
+      prev.map((s) => (s.id || s._id) === id ? { ...s, processingDate, processingShift } : s)
+    );
+    setEditingProcessing(null);
+    try {
+      await studentApi.updateStudent(id, { processingDate, processingShift });
+    } catch (err) {
+      setError(err?.response?.data?.error || err?.message || "Không thể cập nhật thời gian xử lý.");
+      setPendingReload(true);
+    }
+  };
+
   const handleNoteSave = async (studentId) => {
     const draft = noteDraft;
     setStudents((prevStudents) =>
@@ -271,16 +403,28 @@ export default function Students() {
     }
   };
 
-  const handleToggleStudentSelection = (studentId) => {
-    setSelectedStudents((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(studentId)) {
-        newSet.delete(studentId);
-      } else {
-        newSet.add(studentId);
-      }
-      return newSet;
-    });
+  const handleToggleStudentSelection = (studentId, idx, shiftKey) => {
+    if (shiftKey && lastClickedIndex.current !== null) {
+      const start = Math.min(lastClickedIndex.current, idx);
+      const end = Math.max(lastClickedIndex.current, idx);
+      const rangeIds = filteredStudents.slice(start, end + 1).map((s) => s.id || s._id);
+      setSelectedStudents((prev) => {
+        const newSet = new Set(prev);
+        rangeIds.forEach((id) => newSet.add(id));
+        return newSet;
+      });
+    } else {
+      lastClickedIndex.current = idx;
+      setSelectedStudents((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(studentId)) {
+          newSet.delete(studentId);
+        } else {
+          newSet.add(studentId);
+        }
+        return newSet;
+      });
+    }
   };
 
   const handleSelectAllStudents = (selectAll) => {
@@ -290,6 +434,40 @@ export default function Students() {
     } else {
       setSelectedStudents(new Set());
     }
+  };
+
+  const exportToExcel = () => {
+    const selected = filteredStudents.filter((s) => selectedStudents.has(s.id || s._id));
+    const SHIFT_MAP = { S: "Sáng", C: "Chiều", T: "Tối" };
+
+    const rows = selected.map((s) => {
+      const ownerId = s.ownerUserId;
+      const ownerName = users.find((u) => (u._id || u.id) === ownerId)?.name || "";
+      const cId = s.consultant?._id || s.consultant?.id || (typeof s.consultant === "string" ? s.consultant : null);
+      const tvvName = users.find((u) => (u._id || u.id) === cId)?.name || s.consultant?.name || "";
+      const processingTime = s.processingDate
+        ? `${new Date(s.processingDate).toLocaleDateString("vi-VN")}${s.processingShift ? " - " + SHIFT_MAP[s.processingShift] : ""}`
+        : "";
+
+      return {
+        "Họ Tên": s.name || "",
+        "SĐT": s.phone || "",
+        "Năm": s.year || "",
+        "Nhà mạng": s.mobileCarrier || "",
+        "Phân loại": classificationConfig[s.clasification || "0"]?.label || "",
+        "Trường": s.university || "",
+        "Sale Mới": ownerName,
+        "Tư vấn viên": tvvName,
+        "TG Xử lý": processingTime,
+        "Trạng thái": statusConfig[s.status]?.label || s.status || "",
+        "Note": Array.isArray(s.insights) ? s.insights[0] || "" : s.insights || "",
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Học viên");
+    XLSX.writeFile(wb, `hoc-vien-${Date.now()}.xlsx`);
   };
 
   const openAssignPanel = async () => {
@@ -493,10 +671,10 @@ export default function Students() {
         </div>
       </div>
 
-      {openFilterCol && (
+      {(openFilterCol || editingProcessing) && (
         <div
           className="fixed inset-0 z-20"
-          onClick={() => setOpenFilterCol(null)}
+          onClick={() => { setOpenFilterCol(null); setEditingProcessing(null); }}
         />
       )}
 
@@ -659,14 +837,41 @@ export default function Students() {
                 Đã chọn {selectedStudents.size} học viên
               </span>
               <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={exportToExcel}
+                  className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  Xuất Excel ({selectedStudents.size})
+                </button>
                 {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={openAssignPanel}
-                    className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
-                  >
-                    Gán cho người dùng
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={openAssignPanel}
+                      className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                    >
+                      Gán cho người dùng
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ids = Array.from(selectedStudents);
+                        if (!window.confirm(`Xoá ${ids.length} học viên đã chọn?`)) return;
+                        setStudents((prev) => prev.filter((s) => !ids.includes(s.id || s._id)));
+                        setSelectedStudents(new Set());
+                        try {
+                          await Promise.all(ids.map((id) => studentApi.deleteStudent(id)));
+                        } catch (err) {
+                          setError(err?.response?.data?.error || "Xoá thất bại.");
+                          setPendingReload(true);
+                        }
+                      }}
+                      className="rounded-2xl bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600"
+                    >
+                      Xoá {selectedStudents.size} học viên
+                    </button>
+                  </>
                 )}
                 <button
                   type="button"
@@ -679,10 +884,10 @@ export default function Students() {
             </div>
           )}
           <div className="overflow-x-auto">
-            <table className="w-full table-fixed text-sm">
+            <table className="w-full table-fixed text-sm border-collapse">
               <thead className="border-b border-slate-200 bg-slate-50">
-                <tr>
-                  <th className="w-10 px-4 py-3 text-center">
+                <tr className="divide-x divide-slate-200">
+                  <th className="w-10 px-4 py-3 text-center sticky left-0 z-20 bg-slate-50">
                     <input
                       type="checkbox"
                       checked={
@@ -695,10 +900,10 @@ export default function Students() {
                       className="rounded border-slate-300"
                     />
                   </th>
-                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600">
+                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600 sticky left-10 z-20 bg-slate-50">
                     Họ Tên
                   </th>
-                  <th className="w-32 px-4 py-3 text-left font-semibold text-slate-600">
+                  <th className="w-32 px-4 py-3 text-left font-semibold text-slate-600 sticky left-[200px] z-20 bg-slate-50">
                     SĐT
                   </th>
                   <th className="w-16 px-4 py-3 text-left font-semibold text-slate-600">
@@ -709,6 +914,8 @@ export default function Students() {
                     { col: "clasification", label: "Phân Loại", width: "w-28" },
                     { col: "university", label: "Trường", width: "w-44" },
                     { col: "ownerUserId", label: "Sale Mới", width: "w-32" },
+                    { col: "consultant", label: "Tư vấn viên", width: "w-32" },
+                    { col: "campaign", label: "Chiến dịch", width: "w-36" },
                   ].map(({ col, label, width }) => (
                     <th
                       key={col}
@@ -739,6 +946,9 @@ export default function Students() {
                       )}
                     </th>
                   ))}
+                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600">
+                    TG Xử lý
+                  </th>
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Làm Ấm
                   </th>
@@ -819,6 +1029,12 @@ export default function Students() {
                     const ownerUser = users.find(
                       (u) => (u._id || u.id) === ownerId,
                     );
+                    const consultantId =
+                      student.consultant?._id ||
+                      student.consultant?.id ||
+                      (typeof student.consultant === "string" ? student.consultant : null);
+                    const consultantUser = users.find((u) => (u._id || u.id) === consultantId);
+                    const tvvName = consultantUser?.name || student.consultant?.name || "-";
                     const consultantName =
                       ownerUser?.name ||
                       ownerUser?.username ||
@@ -832,26 +1048,22 @@ export default function Students() {
                     return (
                       <tr
                         key={student.id || student._id || idx}
-                        className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}
+                        className={`divide-x divide-slate-200 border-b border-slate-100 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}
                       >
-                        <td className="px-4 py-4 text-center">
+                        <td className="px-4 py-4 text-center sticky left-0 z-10 bg-inherit">
                           <input
                             type="checkbox"
-                            checked={selectedStudents.has(
-                              student.id || student._id,
-                            )}
-                            onChange={() =>
-                              handleToggleStudentSelection(
-                                student.id || student._id,
-                              )
-                            }
-                            className="rounded border-slate-300"
+                            checked={selectedStudents.has(student.id || student._id)}
+                            onChange={() => {}}
+                            onClick={(e) => handleToggleStudentSelection(student.id || student._id, idx, e.shiftKey)}
+                            onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
+                            className="rounded border-slate-300 cursor-pointer"
                           />
                         </td>
-                        <td className="px-4 py-4 text-slate-800 font-medium whitespace-nowrap">
+                        <td className="px-4 py-4 text-slate-800 font-medium whitespace-nowrap sticky left-10 z-10 bg-inherit">
                           {student.name || "-"}
                         </td>
-                        <td className="px-4 py-4 text-blue-500 whitespace-nowrap">
+                        <td className="px-4 py-4 text-blue-500 whitespace-nowrap sticky left-[200px] z-10 bg-inherit">
                           {student.phone || "-"}
                         </td>
                         <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
@@ -902,6 +1114,96 @@ export default function Students() {
                         <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
                           {consultantName}
                         </td>
+                        <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                          {tvvName}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {isAdmin && editingCampaign === (student.id || student._id) ? (
+                            <CampaignEditor
+                              value={student.campaign || ""}
+                              campaigns={campaigns}
+                              onSave={(val) => handleCampaignChange(student.id || student._id, val)}
+                              onCancel={() => setEditingCampaign(null)}
+                            />
+                          ) : (
+                            <div
+                              onClick={() => isAdmin && setEditingCampaign(student.id || student._id)}
+                              className={`rounded-xl border border-transparent px-2 py-1 transition ${isAdmin ? "cursor-pointer hover:border-slate-300 hover:bg-slate-50" : ""}`}
+                            >
+                              {student.campaign ? (
+                                <span className="rounded-full bg-violet-100 text-violet-700 border border-violet-200 px-2.5 py-0.5 text-xs font-semibold">
+                                  {student.campaign}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 text-xs">—</span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap relative">
+                          {editingProcessing?.id === (student.id || student._id) ? (
+                            <div className="absolute z-30 top-1 left-1 bg-white border border-indigo-200 rounded-xl shadow-lg p-3 flex flex-col gap-2 min-w-[160px]"
+                              onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="date"
+                                value={editingProcessing.date}
+                                onChange={(e) => setEditingProcessing((p) => ({ ...p, date: e.target.value }))}
+                                className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200"
+                              />
+                              <div className="flex gap-1">
+                                {[{ v: "S", label: "Sáng", cls: "bg-amber-100 text-amber-600 border-amber-200" },
+                                  { v: "C", label: "Chiều", cls: "bg-blue-100 text-blue-600 border-blue-200" },
+                                  { v: "T", label: "Tối", cls: "bg-indigo-100 text-indigo-600 border-indigo-200" }]
+                                  .map(({ v, label, cls }) => (
+                                    <button key={v} type="button"
+                                      onClick={() => setEditingProcessing((p) => ({ ...p, shift: p.shift === v ? null : v }))}
+                                      className={`flex-1 rounded-lg border px-1 py-1 text-[11px] font-bold transition ${
+                                        editingProcessing.shift === v ? cls : "bg-slate-50 text-slate-400 border-slate-200"
+                                      }`}>
+                                      {label}
+                                    </button>
+                                  ))}
+                              </div>
+                              <div className="flex gap-1.5 mt-0.5">
+                                <button type="button" onClick={() => setEditingProcessing(null)}
+                                  className="flex-1 rounded-lg border border-slate-200 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-50">
+                                  Huỷ
+                                </button>
+                                <button type="button" onClick={handleProcessingSave}
+                                  className="flex-1 rounded-lg bg-indigo-600 py-1 text-[11px] font-bold text-white hover:bg-indigo-700">
+                                  Lưu
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button type="button"
+                              onClick={() => setEditingProcessing({
+                                id: student.id || student._id,
+                                date: student.processingDate ? new Date(student.processingDate).toISOString().slice(0, 10) : "",
+                                shift: student.processingShift || null,
+                              })}
+                              className="w-full text-left rounded-xl border border-transparent px-2 py-1.5 hover:border-slate-300 hover:bg-slate-50 transition">
+                              {student.processingDate ? (
+                                <span className="flex flex-col gap-0.5">
+                                  <span className="text-slate-700 text-xs font-semibold">
+                                    {new Date(student.processingDate).toLocaleDateString("vi-VN")}
+                                  </span>
+                                  {student.processingShift && (
+                                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded w-fit ${
+                                      student.processingShift === "S" ? "bg-amber-100 text-amber-600" :
+                                      student.processingShift === "C" ? "bg-blue-100 text-blue-600" :
+                                      "bg-indigo-100 text-indigo-600"
+                                    }`}>
+                                      {{ S: "Sáng", C: "Chiều", T: "Tối" }[student.processingShift]}
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 text-xs">—</span>
+                              )}
+                            </button>
+                          )}
+                        </td>
                         <td className="px-4 py-4">
                           {renderStepCell(student, "warm")}
                         </td>
@@ -944,7 +1246,7 @@ export default function Students() {
                             {student.scheduledAt ? (
                               new Date(student.scheduledAt).toLocaleString(
                                 "vi-VN",
-                                { dateStyle: "short", timeStyle: "short" },
+                                { dateStyle: "short", timeStyle: "short", hour12: false },
                               )
                             ) : (
                               <span className="text-slate-400 text-xs">
@@ -1077,20 +1379,42 @@ export default function Students() {
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                 />
               </label>
-              <label className="block space-y-2 text-sm text-slate-700">
+              <div className="space-y-2 text-sm text-slate-700">
                 Giờ hẹn
-                <input
-                  type="time"
-                  value={scheduleModal.time}
-                  onChange={(e) =>
-                    setScheduleModal((prev) => ({
-                      ...prev,
-                      time: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                />
-              </label>
+                <div className="flex items-center gap-2 mt-2">
+                  <select
+                    value={scheduleModal.time ? scheduleModal.time.split(":")[0] : ""}
+                    onChange={(e) => {
+                      const h = e.target.value;
+                      const m = scheduleModal.time ? scheduleModal.time.split(":")[1] || "00" : "00";
+                      setScheduleModal((prev) => ({ ...prev, time: h ? `${h}:${m}` : "" }));
+                    }}
+                    className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
+                  >
+                    <option value="">--</option>
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <option key={i} value={String(i).padStart(2, "0")}>
+                        {String(i).padStart(2, "0")}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="font-bold text-slate-400">:</span>
+                  <select
+                    value={scheduleModal.time ? scheduleModal.time.split(":")[1] || "00" : ""}
+                    onChange={(e) => {
+                      const m = e.target.value;
+                      const h = scheduleModal.time ? scheduleModal.time.split(":")[0] || "00" : "00";
+                      setScheduleModal((prev) => ({ ...prev, time: m ? `${h}:${m}` : "" }));
+                    }}
+                    className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
+                  >
+                    <option value="">--</option>
+                    {["00", "15", "30", "45"].map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <label className="block space-y-2 text-sm text-slate-700">
                 Tư vấn viên
                 <select
