@@ -4,7 +4,8 @@
       "Bash(Get-ChildItem -Path \"d:\\\\code\\\\quanlyhocvien\\\\src\" -Recurse -Name)",
       "Bash(Select-String -Pattern \"\\(campaign|Campaign\\)\")",
       "Bash(Get-ChildItem -Path \"d:\\\\code\\\\quanlyhocvien\\\\src\" -Directory)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"D:\\\\code\\\\quanlyhocvien\" -Recurse -Include \"app.js\" -ErrorAction SilentlyContinue)"
     ]
   }
 }

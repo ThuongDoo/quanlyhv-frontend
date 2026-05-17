@@ -4,12 +4,14 @@ import { studentApi } from "../services/students";
 import ConfirmModal from "./ConfirmModal";
 import ScheduleForm from "./ScheduleForm";
 import { fmtDate, fmtDateTime } from "../utils/dateHelpers";
+import { appointmentApi } from "../services/appointments";
 
 function formatScheduledAt(raw) {
   return raw ? fmtDateTime(raw) : null;
 }
 
-export default function StudentCard({ student, users = [] }) {
+export default function StudentCard({ student, users = [], appointmentId }) {
+  const useAppointmentApi = Boolean(appointmentId);
   // Insight
   const [insightOpen, setInsightOpen] = useState(false);
   const [editingInsight, setEditingInsight] = useState(false);
@@ -81,8 +83,10 @@ export default function StudentCard({ student, users = [] }) {
       `Chuyển sang "${label}"?`,
       async () => {
         setLocalStatus(newStatus);
-        try { await studentApi.updateStudent(student._id || student.id, { status: newStatus }); }
-        catch { setLocalStatus(student.status); }
+        try {
+          if (useAppointmentApi) await appointmentApi.update(appointmentId, { status: newStatus });
+          else await studentApi.updateStudent(student._id || student.id, { status: newStatus });
+        } catch { setLocalStatus(student.status); }
       }
     );
   };
@@ -106,8 +110,14 @@ export default function StudentCard({ student, users = [] }) {
         setLocalScheduledAt(newScheduledAt);
         setLocalConsultantId(schedConsultantId || null);
         setScheduleOpen(false);
-        try { await studentApi.scheduleStudent(student._id || student.id, { consultantId: schedConsultantId, scheduledAt: newScheduledAt }); }
-        catch { setLocalScheduledAt(scheduledAt); setLocalConsultantId(resolvedConsultantId); }
+        try {
+          if (useAppointmentApi) {
+            const [aptDate, aptTime] = newScheduledAt ? newScheduledAt.split("T") : [null, null];
+            await appointmentApi.update(appointmentId, { appointmentDate: aptDate, appointmentTime: aptTime, consultantId: schedConsultantId });
+          } else {
+            await studentApi.scheduleStudent(student._id || student.id, { consultantId: schedConsultantId, scheduledAt: newScheduledAt });
+          }
+        } catch { setLocalScheduledAt(scheduledAt); setLocalConsultantId(resolvedConsultantId); }
       }
     );
     setScheduleOpen(false);
@@ -130,8 +140,10 @@ export default function StudentCard({ student, users = [] }) {
       async () => {
         setLocalClosingCallDate(val);
         setClosingOpen(false);
-        try { await studentApi.updateStudent(student._id || student.id, { closingCallDate: val }); }
-        catch { setLocalClosingCallDate(student.closingCallDate); }
+        try {
+          if (useAppointmentApi) await appointmentApi.update(appointmentId, { closingCallDate: val });
+          else await studentApi.updateStudent(student._id || student.id, { closingCallDate: val });
+        } catch { setLocalClosingCallDate(student.closingCallDate); }
       }
     );
     setClosingOpen(false);

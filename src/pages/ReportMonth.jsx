@@ -15,10 +15,6 @@ export default function ReportMonth() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const timeStr = now.toLocaleTimeString("vi-VN", {
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-  });
-
   useEffect(() => {
     setLoading(true);
     shiftPerformanceApi
@@ -33,9 +29,6 @@ export default function ReportMonth() {
       <div className="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-10 shadow-sm flex items-center justify-between gap-4">
         <div>
           <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">Báo cáo Tổng kết Tháng</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Đồng bộ lúc: <span className="text-blue-500 font-semibold">{timeStr}</span>
-          </p>
         </div>
         <select
           value={month}

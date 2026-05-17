@@ -1,13 +1,14 @@
+import DateInput from "./DateInput";
+
 export default function ScheduleForm({ date, hour, minute, consultantId, users, onDateChange, onHourChange, onMinuteChange, onConsultantChange, onSave, onCancel, saving }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <label className="text-xs text-slate-500">Ngày hẹn</label>
-        <input
-          type="date"
+        <DateInput
           value={date}
           onChange={(e) => onDateChange(e.target.value)}
-          className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+          className="rounded-xl"
         />
       </div>
 
@@ -43,7 +44,7 @@ export default function ScheduleForm({ date, hour, minute, consultantId, users, 
           className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
         >
           <option value="">-- Chọn --</option>
-          {users.map((u) => (
+          {users.filter((u) => u.role === "consultant").map((u) => (
             <option key={u._id || u.id} value={u._id || u.id}>{u.name || u.username}</option>
           ))}
         </select>

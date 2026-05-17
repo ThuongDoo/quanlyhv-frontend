@@ -11,6 +11,7 @@ import FilterDropdown from "../components/FilterDropdown";
 import ImportExcel from "../components/ImportExcel";
 import ScheduleForm from "../components/ScheduleForm";
 import { fmtDate, fmtDateTime } from "../utils/dateHelpers";
+import { appointmentApi } from "../services/appointments";
 import {
   classificationConfig,
   statusConfig,
@@ -19,59 +20,6 @@ import {
 } from "../constants/studentConfig";
 
 
-function CampaignEditor({ value, campaigns, onSave, onCancel }) {
-  const [draft, setDraft] = useState(value);
-  const filtered = campaigns.filter((c) =>
-    c.toLowerCase().includes(draft.toLowerCase())
-  );
-
-  return (
-    <div className="relative z-30" onClick={(e) => e.stopPropagation()}>
-      <input
-        autoFocus
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") onSave(draft);
-          if (e.key === "Escape") onCancel();
-        }}
-        placeholder="Nhập hoặc chọn..."
-        className="w-full rounded-lg border border-violet-300 px-2 py-1 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-violet-200"
-      />
-      <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-        {draft && (
-          <button
-            type="button"
-            onMouseDown={() => onSave("")}
-            className="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 border-b border-slate-100"
-          >
-            Xoá chiến dịch
-          </button>
-        )}
-        {filtered.length === 0 && draft ? (
-          <button
-            type="button"
-            onMouseDown={() => onSave(draft)}
-            className="w-full text-left px-3 py-1.5 text-xs text-violet-600 font-semibold hover:bg-violet-50"
-          >
-            + Tạo "{draft}"
-          </button>
-        ) : (
-          filtered.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onMouseDown={() => onSave(c)}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-violet-50 hover:text-violet-700 transition ${c === value ? "font-bold text-violet-600 bg-violet-50" : "text-slate-700"}`}
-            >
-              {c}
-            </button>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
 
 export default function Students() {
   const currentUser = getUser();
@@ -117,6 +65,9 @@ export default function Students() {
     date: "",
     time: "",
     consultantId: "",
+    saving: false,
+    result: null, // "success" | "error"
+    resultMessage: "",
   });
   const [newStudent, setNewStudent] = useState({
     name: "",
@@ -582,33 +533,21 @@ export default function Students() {
 
   const handleScheduleSave = async () => {
     const { studentId, date, time, consultantId } = scheduleModal;
-    const scheduledAt = date ? `${date}T${time || "00:00"}` : null;
-    setStudents((prev) =>
-      prev.map((s) =>
-        (s.id || s._id) === studentId
-          ? { ...s, consultant: consultantId, scheduledAt }
-          : s,
-      ),
-    );
-    setScheduleModal({
-      open: false,
-      studentId: null,
-      date: "",
-      time: "",
-      consultantId: "",
-    });
+    setScheduleModal((p) => ({ ...p, saving: true, result: null }));
     try {
-      await studentApi.scheduleStudent(studentId, {
-        consultantId,
-        scheduledAt,
+      await appointmentApi.create({
+        studentId,
+        appointmentDate: date,
+        appointmentTime: time || null,
+        consultantId: consultantId || null,
       });
+      setScheduleModal((p) => ({ ...p, saving: false, result: "success", resultMessage: "Đặt lịch hẹn thành công!" }));
     } catch (err) {
-      setError(
-        err?.response?.data?.error || err?.message || "Không thể đặt lịch hẹn.",
-      );
-      setPendingReload(true);
+      setScheduleModal((p) => ({ ...p, saving: false, result: "error", resultMessage: err?.response?.data?.error || "Đặt lịch thất bại." }));
     }
   };
+
+  const closeScheduleModal = () => setScheduleModal({ open: false, studentId: null, date: "", time: "", consultantId: "", saving: false, result: null, resultMessage: "" });
 
   const renderStepCell = (student, key) => {
     return (
@@ -623,12 +562,6 @@ export default function Students() {
   };
 
   const totalPages = pagination.totalPages || 1;
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -638,10 +571,6 @@ export default function Students() {
             <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">
               Danh sách học viên
             </h1>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Đồng bộ lúc:{" "}
-              <span className="text-blue-500 font-semibold">{timeStr}</span>
-            </p>
           </div>
           <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full">
             {pagination.total || students.length} Leads
@@ -667,6 +596,15 @@ export default function Students() {
               <ImportExcel
                 onImport={async (file) => { const res = await studentApi.importStudents(file); loadStudents(); return res; }}
                 label="Nhập Excel"
+                templateFilename="mau_import_hoc_vien"
+                templateColumns={[
+                  { key: "name", example: "Nguyễn Văn A" },
+                  { key: "phone", example: "0987654321" },
+                  { key: "year", example: 2005 },
+                  { key: "university", example: "UIT" },
+                  { key: "mobileCarrier", example: "viettel" },
+                  { key: "campaign", example: "Chiến dịch 2025" },
+                ]}
               />
             )}
           </div>
@@ -889,7 +827,7 @@ export default function Students() {
             <table className="w-full table-fixed text-sm border-collapse">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr className="divide-x divide-slate-200">
-                  <th className="w-10 px-4 py-3 text-center sticky left-0 z-20 bg-slate-50">
+                  <th className="w-10 px-4 py-3 text-center sticky left-0 z-[2] bg-slate-50">
                     <input
                       type="checkbox"
                       checked={
@@ -902,10 +840,10 @@ export default function Students() {
                       className="rounded border-slate-300"
                     />
                   </th>
-                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600 sticky left-10 z-20 bg-slate-50">
+                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600 sticky left-10 z-[2] bg-slate-50">
                     Họ Tên
                   </th>
-                  <th className="w-32 px-4 py-3 text-left font-semibold text-slate-600 sticky left-[200px] z-20 bg-slate-50">
+                  <th className="w-32 px-4 py-3 text-left font-semibold text-slate-600 sticky left-[200px] z-[2] bg-slate-50">
                     SĐT
                   </th>
                   <th className="w-16 px-4 py-3 text-left font-semibold text-slate-600">
@@ -963,8 +901,8 @@ export default function Students() {
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Liên hệ Lần 3
                   </th>
-                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
-                    Lịch hẹn
+                  <th className="w-28 px-4 py-3 text-center font-semibold text-slate-600">
+                    Đặt lịch
                   </th>
                   {[{ col: "status", label: "Đã Đến", width: "w-28" }].map(
                     ({ col, label, width }) => (
@@ -1052,7 +990,7 @@ export default function Students() {
                         key={student.id || student._id || idx}
                         className={`divide-x divide-slate-200 border-b border-slate-100 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}
                       >
-                        <td className="px-4 py-4 text-center sticky left-0 z-10 bg-inherit">
+                        <td className="px-4 py-4 text-center sticky left-0 z-[1] bg-inherit">
                           <input
                             type="checkbox"
                             checked={selectedStudents.has(student.id || student._id)}
@@ -1062,10 +1000,10 @@ export default function Students() {
                             className="rounded border-slate-300 cursor-pointer"
                           />
                         </td>
-                        <td className="px-4 py-4 text-slate-800 font-medium whitespace-nowrap sticky left-10 z-10 bg-inherit">
+                        <td className="px-4 py-4 text-slate-800 font-medium whitespace-nowrap sticky left-10 z-[1] bg-inherit">
                           {student.name || "-"}
                         </td>
-                        <td className="px-4 py-4 text-blue-500 whitespace-nowrap sticky left-[200px] z-10 bg-inherit">
+                        <td className="px-4 py-4 text-blue-500 whitespace-nowrap sticky left-[200px] z-[1] bg-inherit">
                           {student.phone || "-"}
                         </td>
                         <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
@@ -1121,23 +1059,28 @@ export default function Students() {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           {isAdmin && editingCampaign === (student.id || student._id) ? (
-                            <CampaignEditor
+                            <select
                               value={student.campaign || ""}
-                              campaigns={campaigns}
-                              onSave={(val) => handleCampaignChange(student.id || student._id, val)}
-                              onCancel={() => setEditingCampaign(null)}
-                            />
+                              onChange={(e) => handleCampaignChange(student.id || student._id, e.target.value)}
+                              onBlur={() => setEditingCampaign(null)}
+                              onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el?.click(), 0); }}
+                              autoFocus
+                              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-violet-300 bg-white focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            >
+                              <option value="">— Trống —</option>
+                              {campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </select>
                           ) : (
                             <div
                               onClick={() => isAdmin && setEditingCampaign(student.id || student._id)}
-                              className={`rounded-xl border border-transparent px-2 py-1 transition ${isAdmin ? "cursor-pointer hover:border-slate-300 hover:bg-slate-50" : ""}`}
+                              className={`rounded-xl border border-transparent px-2 py-1 transition ${isAdmin ? "cursor-pointer hover:border-violet-200 hover:bg-violet-50" : ""}`}
                             >
                               {student.campaign ? (
                                 <span className="rounded-full bg-violet-100 text-violet-700 border border-violet-200 px-2.5 py-0.5 text-xs font-semibold">
                                   {student.campaign}
                                 </span>
                               ) : (
-                                <span className="text-slate-300 text-xs">—</span>
+                                <span className={`text-xs ${isAdmin ? "text-violet-300" : "text-slate-300"}`}>—</span>
                               )}
                             </div>
                           )}
@@ -1181,7 +1124,7 @@ export default function Students() {
                             <button type="button"
                               onClick={() => setEditingProcessing({
                                 id: student.id || student._id,
-                                date: student.processingDate ? new Date(student.processingDate).toISOString().slice(0, 10) : "",
+                                date: student.processingDate ? new Date(student.processingDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
                                 shift: student.processingShift || null,
                               })}
                               className="w-full text-left rounded-xl border border-transparent px-2 py-1.5 hover:border-slate-300 hover:bg-slate-50 transition">
@@ -1218,40 +1161,19 @@ export default function Students() {
                         <td className="px-4 py-4">
                           {renderStepCell(student, "call3")}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 text-center">
                           <button
                             type="button"
-                            onClick={() => {
-                              const sid = student.id || student._id;
-                              const raw = student.scheduledAt;
-                              const d = raw ? new Date(raw) : null;
-                              const date = d
-                                ? d.toISOString().slice(0, 10)
-                                : "";
-                              const time = d
-                                ? d.toISOString().slice(11, 16)
-                                : "";
-                              setScheduleModal({
-                                open: true,
-                                studentId: sid,
-                                date,
-                                time,
-                                consultantId:
-                                  student.consultant?._id ||
-                                  student.consultant?.id ||
-                                  student.consultant ||
-                                  "",
-                              });
-                            }}
-                            className="w-full text-left rounded-2xl border border-transparent px-2 py-1.5 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition"
+                            onClick={() => setScheduleModal({
+                              open: true,
+                              studentId: student.id || student._id,
+                              date: new Date().toISOString().slice(0, 10),
+                              time: "",
+                              consultantId: student.consultant?._id || student.consultant?.id || (typeof student.consultant === "string" ? student.consultant : "") || "",
+                            })}
+                            className="rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition"
                           >
-                            {student.scheduledAt ? (
-                              fmtDateTime(student.scheduledAt)
-                            ) : (
-                              <span className="text-slate-400 text-xs">
-                                Chưa đặt
-                              </span>
-                            )}
+                            + Đặt lịch
                           </button>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
@@ -1346,40 +1268,64 @@ export default function Students() {
       {scheduleModal.open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() =>
-            setScheduleModal({
-              open: false,
-              studentId: null,
-              date: "",
-              time: "",
-              consultantId: "",
-            })
-          }
+          onClick={!scheduleModal.saving ? closeScheduleModal : undefined}
         >
           <div
             className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-base font-bold text-slate-900 mb-5">Đặt lịch hẹn</h2>
-            <ScheduleForm
-              date={scheduleModal.date}
-              hour={scheduleModal.time ? scheduleModal.time.split(":")[0] : ""}
-              minute={scheduleModal.time ? scheduleModal.time.split(":")[1] || "00" : "00"}
-              consultantId={scheduleModal.consultantId}
-              users={users}
-              onDateChange={(v) => setScheduleModal((p) => ({ ...p, date: v }))}
-              onHourChange={(h) => {
-                const m = scheduleModal.time?.split(":")[1] || "00";
-                setScheduleModal((p) => ({ ...p, time: h ? `${h}:${m}` : "" }));
-              }}
-              onMinuteChange={(m) => {
-                const h = scheduleModal.time?.split(":")[0] || "00";
-                setScheduleModal((p) => ({ ...p, time: `${h}:${m}` }));
-              }}
-              onConsultantChange={(v) => setScheduleModal((p) => ({ ...p, consultantId: v }))}
-              onSave={handleScheduleSave}
-              onCancel={() => setScheduleModal({ open: false, studentId: null, date: "", time: "", consultantId: "" })}
-            />
+
+            {scheduleModal.saving ? (
+              <div className="flex flex-col items-center gap-4 py-8">
+                <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                <p className="text-sm font-semibold text-slate-600">Đang đặt lịch hẹn...</p>
+              </div>
+            ) : scheduleModal.result === "success" ? (
+              <div className="flex flex-col items-center gap-4 py-6">
+                <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center text-2xl">✓</div>
+                <p className="text-base font-bold text-emerald-600">{scheduleModal.resultMessage}</p>
+                <button onClick={closeScheduleModal}
+                  className="w-full rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition">
+                  Đóng
+                </button>
+              </div>
+            ) : scheduleModal.result === "error" ? (
+              <div className="flex flex-col items-center gap-4 py-6">
+                <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center text-2xl">✕</div>
+                <p className="text-base font-bold text-red-500">{scheduleModal.resultMessage}</p>
+                <div className="flex gap-3 w-full">
+                  <button onClick={() => setScheduleModal((p) => ({ ...p, result: null }))}
+                    className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
+                    Thử lại
+                  </button>
+                  <button onClick={closeScheduleModal}
+                    className="flex-1 rounded-2xl bg-red-500 py-3 text-sm font-bold text-white hover:bg-red-600 transition">
+                    Đóng
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <ScheduleForm
+                date={scheduleModal.date}
+                hour={scheduleModal.time ? scheduleModal.time.split(":")[0] : ""}
+                minute={scheduleModal.time ? scheduleModal.time.split(":")[1] || "00" : "00"}
+                consultantId={scheduleModal.consultantId}
+                users={users}
+                onDateChange={(v) => setScheduleModal((p) => ({ ...p, date: v }))}
+                onHourChange={(h) => {
+                  const m = scheduleModal.time?.split(":")[1] || "00";
+                  setScheduleModal((p) => ({ ...p, time: h ? `${h}:${m}` : "" }));
+                }}
+                onMinuteChange={(m) => {
+                  const h = scheduleModal.time?.split(":")[0] || "00";
+                  setScheduleModal((p) => ({ ...p, time: `${h}:${m}` }));
+                }}
+                onConsultantChange={(v) => setScheduleModal((p) => ({ ...p, consultantId: v }))}
+                onSave={handleScheduleSave}
+                onCancel={closeScheduleModal}
+              />
+            )}
           </div>
         </div>
       )}

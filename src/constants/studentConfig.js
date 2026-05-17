@@ -31,6 +31,14 @@ export const statusConfig = {
     label: "TRỐNG",
     className: "bg-blue-100 text-blue-700 border-blue-200",
   },
+  REGISTERED: {
+    label: "ĐÃ ĐĂNG KÝ",
+    className: "bg-amber-100 text-amber-700 border-amber-200",
+  },
+  CANCELLED: {
+    label: "ĐÃ HỦY",
+    className: "bg-red-100 text-red-700 border-red-200",
+  },
 };
 
 export const MOBILE_CARRIER_OPTIONS = [
@@ -83,4 +91,10 @@ export const STEP_CONFIG = {
     ],
     hasNote: true,
   },
+};
+
+export const ROLE_LABELS = {
+  sale: "Sale",
+  consultant: "Tư vấn",
+  admin: "Quản lý",
 };

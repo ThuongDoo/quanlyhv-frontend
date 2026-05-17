@@ -4,6 +4,7 @@ import Sidebar from "../components/layouts/Sidebar";
 import { Outlet } from "react-router-dom";
 import { clearToken, getUser } from "../hooks/useAuth";
 import { authApi } from "../services/auth";
+import { ROLE_LABELS } from "../constants/studentConfig";
 
 function ChangePasswordModal({ onClose }) {
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirm: "" });
@@ -101,7 +102,7 @@ export default function MainLayout() {
               }`}>
                 {user.name}
                 <span className="opacity-40">•</span>
-                <span className="font-bold text-xs uppercase">{user.role}</span>
+                <span className="font-bold text-xs">{ROLE_LABELS[user.role] ?? user.role}</span>
               </div>
             )}
             <button

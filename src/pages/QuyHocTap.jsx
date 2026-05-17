@@ -9,8 +9,6 @@ const TRANG_THAI = {
   da_nop:   { label: "Đã nộp",   cls: "border-emerald-200 bg-emerald-50 text-emerald-600" },
 };
 
-import { fmtDate } from "../utils/dateHelpers";
-
 function AddPenaltyModal({ users, onClose, onSaved }) {
   const [form, setForm] = useState({ userId: "", date: "", loiPhat: "", tienPhat: 10000, trangThai: "chua_nop" });
   const [loading, setLoading] = useState(false);

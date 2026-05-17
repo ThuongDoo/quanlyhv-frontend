@@ -3,6 +3,7 @@ import { authApi } from "../services/auth";
 import { useAuth } from "../hooks/useAuth";
 import ImportExcel from "../components/ImportExcel";
 import { fmtDate } from "../utils/dateHelpers";
+import { ROLE_LABELS } from "../constants/studentConfig";
 
 const ROLE_OPTIONS = ["sale", "consultant", "admin"];
 
@@ -92,7 +93,7 @@ function NhanSuModal({ initial, onClose, onSaved }) {
               onChange={set("role")}
               className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200"
             >
-              {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
             </select>
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
@@ -146,6 +147,15 @@ export default function NhanSu() {
             <ImportExcel
               onImport={async (file) => { const res = await authApi.importUsers(file); loadNhanSu(); return res; }}
               defaultPassword="123456"
+              templateFilename="mau_import_nhan_su"
+              templateColumns={[
+                { key: "name", example: "Nguyễn Văn A" },
+                { key: "phone", example: "0987654321" },
+                { key: "email", example: "a@example.com" },
+                { key: "employeeId", example: "T12345" },
+                { key: "role", example: "sale" },
+                { key: "university", example: "UIT" },
+              ]}
             />
             <button
               onClick={() => setModal({ mode: "add" })}
@@ -196,7 +206,7 @@ export default function NhanSu() {
                         ns.role === "consultant" ? "bg-indigo-100 text-indigo-600" :
                         "bg-slate-100 text-slate-500"
                       }`}>
-                        {ns.role}
+                        {ROLE_LABELS[ns.role] ?? ns.role}
                       </span>
                     </td>
                     {isAdmin && (

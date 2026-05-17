@@ -26,9 +26,6 @@ function NumberInput({ label, value, onChange, highlight }) {
 }
 
 export default function ShiftPerformance() {
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-
   const [date, setDate] = useState(getTodayString);
   const [shift, setShift] = useState(getCurrentShift);
   const [loading, setLoading] = useState(false);
@@ -86,9 +83,6 @@ export default function ShiftPerformance() {
         <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">
           Cập nhật Số liệu Ca làm việc
         </h1>
-        <p className="text-xs text-slate-400 mt-0.5">
-          Đồng bộ lúc: <span className="text-blue-500 font-semibold">{timeStr}</span>
-        </p>
       </div>
 
       <div className="max-w-2xl mx-auto px-6 py-8">
