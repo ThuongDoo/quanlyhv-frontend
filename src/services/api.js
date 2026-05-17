@@ -66,10 +66,27 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    if (error?.response?.status === 401) {
+    const status = error?.response?.status;
+
+    // 401 → hết phiên, về login
+    if (status === 401) {
       clearToken();
       window.location.href = "/login";
     }
+
+    // Normalize message từ backend vào error.message
+    // Backend trả { error: "..." } hoặc { message: "..." }
+    const serverMsg =
+      error?.response?.data?.error ||
+      error?.response?.data?.message;
+
+    const defaultMsg =
+      status >= 500 ? "Lỗi máy chủ, vui lòng thử lại sau." :
+      status === 403 ? "Bạn không có quyền thực hiện thao tác này." :
+      status === 404 ? "Không tìm thấy dữ liệu." :
+      "Đã có lỗi xảy ra.";
+
+    error.message = serverMsg || defaultMsg;
     return Promise.reject(error);
   },
 );

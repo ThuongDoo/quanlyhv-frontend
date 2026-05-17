@@ -25,7 +25,7 @@ export default function ReportMonth() {
   }, [month, year]);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
+    <div className="h-full flex flex-col bg-slate-50 font-sans">
       <div className="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-10 shadow-sm flex items-center justify-between gap-4">
         <div>
           <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">Báo cáo Tổng kết Tháng</h1>
@@ -41,6 +41,7 @@ export default function ReportMonth() {
         </select>
       </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col gap-6">
         {loading ? (
           <p className="text-center text-slate-400 py-20 text-sm">Đang tải...</p>
@@ -54,6 +55,7 @@ export default function ReportMonth() {
             />
           </>
         )}
+      </div>
       </div>
     </div>
   );

@@ -5,61 +5,100 @@ import { clearToken, getUser } from "../../hooks/useAuth";
 import { authApi } from "../../services/auth";
 import { ROLE_LABELS } from "../../constants/studentConfig";
 
+function ResultModal({ type, text, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl flex flex-col items-center gap-4">
+        {type === "success" ? (
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+            <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        ) : (
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+            <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+        )}
+        <p className="text-base font-bold text-slate-800 text-center">{text}</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className={`w-full rounded-2xl py-3 text-sm font-bold text-white transition ${type === "success" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-500 hover:bg-red-600"}`}
+        >
+          Đóng
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ChangePasswordModal({ onClose }) {
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirm: "" });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [result, setResult] = useState(null);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.newPassword !== form.confirm) { setError("Mật khẩu xác nhận không khớp."); return; }
-    setLoading(true); setError(""); setSuccess("");
+    if (form.newPassword !== form.confirm) {
+      setResult({ type: "error", text: "Mật khẩu xác nhận không khớp." });
+      return;
+    }
+    setLoading(true);
     try {
       await authApi.changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword });
-      setSuccess("Đổi mật khẩu thành công!");
+      setResult({ type: "success", text: "Đổi mật khẩu thành công!" });
       setForm({ currentPassword: "", newPassword: "", confirm: "" });
     } catch (err) {
-      setError(err?.response?.data?.error || "Đổi mật khẩu thất bại.");
+      setResult({ type: "error", text: err.message || "Đổi mật khẩu thất bại." });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col gap-4">
-        <h2 className="font-extrabold text-slate-800 text-base">Đổi mật khẩu</h2>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          {[
-            { label: "Mật khẩu hiện tại", field: "currentPassword" },
-            { label: "Mật khẩu mới", field: "newPassword" },
-            { label: "Xác nhận mật khẩu mới", field: "confirm" },
-          ].map(({ label, field }) => (
-            <div key={field} className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{label}</label>
-              <input
-                type="password"
-                value={form[field]}
-                onChange={set(field)}
-                required
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200"
-              />
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+        <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col gap-4">
+          <h2 className="font-extrabold text-slate-800 text-base">Đổi mật khẩu</h2>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            {[
+              { label: "Mật khẩu hiện tại", field: "currentPassword" },
+              { label: "Mật khẩu mới", field: "newPassword" },
+              { label: "Xác nhận mật khẩu mới", field: "confirm" },
+            ].map(({ label, field }) => (
+              <div key={field} className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{label}</label>
+                <input
+                  type="password"
+                  value={form[field]}
+                  onChange={set(field)}
+                  required
+                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+              </div>
+            ))}
+            <div className="flex gap-3 mt-1">
+              <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50">Đóng</button>
+              <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+                {loading ? "Đang lưu..." : "Lưu"}
+              </button>
             </div>
-          ))}
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          {success && <p className="text-xs text-emerald-600">{success}</p>}
-          <div className="flex gap-3 mt-1">
-            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50">Đóng</button>
-            <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
-              {loading ? "Đang lưu..." : "Lưu"}
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+      {result && (
+        <ResultModal
+          type={result.type}
+          text={result.text}
+          onClose={() => { setResult(null); if (result.type === "success") onClose(); }}
+        />
+      )}
+    </>
   );
 }
 

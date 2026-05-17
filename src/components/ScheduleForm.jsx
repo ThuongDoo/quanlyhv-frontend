@@ -28,6 +28,7 @@ export default function ScheduleForm({ date, hour, minute, consultantId, users, 
         <DateInput
           value={date}
           onChange={(e) => onDateChange(e.target.value)}
+          min={new Date().toISOString().slice(0, 10)}
           className={`rounded-xl ${err("date") ? "border-red-300 ring-1 ring-red-200" : ""}`}
         />
         {err("date") && <p className="text-xs text-red-400">Vui lòng chọn ngày hẹn</p>}
@@ -70,7 +71,7 @@ export default function ScheduleForm({ date, hour, minute, consultantId, users, 
           className={`rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 bg-white transition ${err("consultantId") ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-slate-200 focus:border-indigo-400 focus:ring-indigo-100"}`}
         >
           <option value="">-- Chọn tư vấn viên --</option>
-          {users.filter((u) => u.role === "consultant").map((u) => (
+          {users.filter((u) => u.role === "consultant" || u.role === "admin").map((u) => (
             <option key={u._id || u.id} value={u._id || u.id}>{u.name || u.username}</option>
           ))}
         </select>

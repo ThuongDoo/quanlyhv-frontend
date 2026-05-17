@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-export default function DateInput({ value, onChange, className = "" }) {
+export default function DateInput({ value, onChange, className = "", min }) {
   const inputRef = useRef(null);
 
   const formatted = value
@@ -24,6 +24,7 @@ export default function DateInput({ value, onChange, className = "" }) {
         type="date"
         value={value}
         onChange={onChange}
+        min={min}
         className="absolute inset-0 opacity-0 w-full cursor-pointer"
       />
     </div>

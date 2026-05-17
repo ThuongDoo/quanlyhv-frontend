@@ -2,8 +2,10 @@
 import { useDebounce } from "../hooks/useDebounce";
 import { studentApi } from "../services/students";
 import { authApi } from "../services/auth";
+import { appointmentApi } from "../services/appointments";
 import { getUser } from "../hooks/useAuth";
 import StepCell from "../components/StepCell";
+import ScheduleForm from "../components/ScheduleForm";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import FilterDropdown from "../components/FilterDropdown";
@@ -51,13 +53,20 @@ export default function Students() {
   const [universities, setUniversities] = useState([]);
   const [filters, setFilters] = useState({});
   const [openFilterCol, setOpenFilterCol] = useState(null);
+  const [filterAnchorRect, setFilterAnchorRect] = useState(null);
+  const [scheduleResult, setScheduleResult] = useState(null);
+  const [assignResult, setAssignResult] = useState(null);
+  const [lastSelectedIdx, setLastSelectedIdx] = useState(null);
   const [scheduleModal, setScheduleModal] = useState({
     open: false,
     studentId: null,
     date: "",
-    time: "",
+    hour: "",
+    minute: "00",
     consultantId: "",
   });
+  const closeScheduleModal = () =>
+    setScheduleModal({ open: false, studentId: null, date: "", hour: "", minute: "00", consultantId: "" });
   const [newStudent, setNewStudent] = useState({
     name: "",
     phone: "",
@@ -310,11 +319,11 @@ export default function Students() {
 
   const handleSelectAllStudents = (selectAll) => {
     if (selectAll) {
-      const allIds = new Set(students.map((s) => s.id || s._id));
-      setSelectedStudents(allIds);
+      setSelectedStudents(new Set(students.map((s) => s.id || s._id)));
     } else {
       setSelectedStudents(new Set());
     }
+    setLastSelectedIdx(null);
   };
 
   const openAssignPanel = async () => {
@@ -349,20 +358,13 @@ export default function Students() {
         Array.from(selectedStudents),
         assignUserId,
       );
-      setAssignMessage(
-        `${result.stats.modified} học viên đã được gán thành công.`,
-      );
       setSelectedStudents(new Set());
       setAssignUserId("");
+      setShowAssignPanel(false);
       loadStudents();
-      setTimeout(() => {
-        setShowAssignPanel(false);
-        setAssignMessage("");
-      }, 2000);
+      setAssignResult({ type: "success", text: `${result.stats?.modified ?? selectedStudents.size} học viên đã được gán thành công.` });
     } catch (err) {
-      setAssignMessage(
-        err?.response?.data?.error || err?.message || "Không thể gán học viên.",
-      );
+      setAssignResult({ type: "error", text: err.message || "Không thể gán học viên." });
     } finally {
       setAssignLoading(false);
     }
@@ -426,8 +428,9 @@ export default function Students() {
   };
 
   const handleScheduleSave = async () => {
-    const { studentId, date, time, consultantId } = scheduleModal;
-    const scheduledAt = date ? `${date}T${time || "00:00"}` : null;
+    const { studentId, date, hour, minute, consultantId } = scheduleModal;
+    const time = `${hour || "00"}:${minute || "00"}`;
+    const scheduledAt = date ? `${date}T${time}` : null;
     setStudents((prev) =>
       prev.map((s) =>
         (s.id || s._id) === studentId
@@ -435,22 +438,25 @@ export default function Students() {
           : s,
       ),
     );
-    setScheduleModal({
-      open: false,
-      studentId: null,
-      date: "",
-      time: "",
-      consultantId: "",
-    });
+    closeScheduleModal();
     try {
-      await studentApi.scheduleStudent(studentId, {
-        consultantId,
-        scheduledAt,
-      });
+      await Promise.all([
+        studentApi.scheduleStudent(studentId, { consultantId, scheduledAt }),
+        appointmentApi.create({
+          studentId,
+          consultantId,
+          appointmentDate: scheduledAt,
+          appointmentTime: time,
+          ownerUserId: currentUser?._id || currentUser?.id,
+        }),
+      ]);
+      setScheduleResult({ type: "success", text: "Đặt lịch hẹn thành công!" });
     } catch (err) {
-      setError(
-        err?.response?.data?.error || err?.message || "Không thể đặt lịch hẹn.",
-      );
+      const raw = err?.response?.data?.error || err?.message || "";
+      const text = raw.toLowerCase().includes("owneruserid")
+        ? "Đặt lịch không thành công do học viên này chưa có người sale phụ trách."
+        : err.message || "Không thể đặt lịch hẹn.";
+      setScheduleResult({ type: "error", text });
       setPendingReload(true);
     }
   };
@@ -520,9 +526,16 @@ export default function Students() {
       {openFilterCol && (
         <div
           className="fixed inset-0 z-20"
-          onClick={() => setOpenFilterCol(null)}
+          onClick={() => { setOpenFilterCol(null); setFilterAnchorRect(null); }}
         />
       )}
+      <FilterDropdown
+        rect={filterAnchorRect}
+        options={filterOptions[openFilterCol] || []}
+        selected={filters[openFilterCol] || []}
+        onToggle={(value) => toggleFilter(openFilterCol, value)}
+        onClear={() => clearFilter(openFilterCol)}
+      />
 
       <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-6 py-4 flex flex-col gap-4 overflow-hidden">
         <div className="flex items-center justify-between gap-3">
@@ -701,7 +714,7 @@ export default function Students() {
             <table className="w-full table-fixed text-sm">
               <thead className="sticky top-0 z-[3] border-b border-slate-200 bg-slate-50 shadow-sm">
                 <tr>
-                  <th className="w-10 px-4 py-3 text-center">
+                  <th className="w-10 px-4 py-3 text-center sticky left-0 z-[4] bg-slate-50">
                     <input
                       type="checkbox"
                       checked={
@@ -714,10 +727,10 @@ export default function Students() {
                       className="rounded border-slate-300"
                     />
                   </th>
-                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600">
+                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600 sticky left-10 z-[4] bg-slate-50">
                     Họ Tên
                   </th>
-                  <th className="w-32 px-4 py-3 text-left font-semibold text-slate-600">
+                  <th className="w-32 px-4 py-3 text-left font-semibold text-slate-600 sticky left-[200px] z-[4] bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                     SĐT
                   </th>
                   <th className="w-16 px-4 py-3 text-left font-semibold text-slate-600">
@@ -731,13 +744,19 @@ export default function Students() {
                   ].map(({ col, label, width }) => (
                     <th
                       key={col}
-                      className={`${width} px-4 py-3 text-left font-semibold text-slate-600 relative`}
+                      className={`${width} px-4 py-3 text-left font-semibold text-slate-600`}
                     >
                       <button
                         type="button"
-                        onClick={() =>
-                          setOpenFilterCol(openFilterCol === col ? null : col)
-                        }
+                        onClick={(e) => {
+                          if (openFilterCol === col) {
+                            setOpenFilterCol(null);
+                            setFilterAnchorRect(null);
+                          } else {
+                            setOpenFilterCol(col);
+                            setFilterAnchorRect(e.currentTarget.getBoundingClientRect());
+                          }
+                        }}
                         className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
                       >
                         {label}
@@ -748,14 +767,6 @@ export default function Students() {
                         )}
                         <span className="text-xs opacity-50">▾</span>
                       </button>
-                      {openFilterCol === col && (
-                        <FilterDropdown
-                          options={filterOptions[col] || []}
-                          selected={filters[col] || []}
-                          onToggle={(value) => toggleFilter(col, value)}
-                          onClear={() => clearFilter(col)}
-                        />
-                      )}
                     </th>
                   ))}
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
@@ -773,38 +784,6 @@ export default function Students() {
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Lịch hẹn
                   </th>
-                  {[{ col: "status", label: "Đã Đến", width: "w-28" }].map(
-                    ({ col, label, width }) => (
-                      <th
-                        key={col}
-                        className={`${width} px-4 py-3 text-left font-semibold text-slate-600 relative`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setOpenFilterCol(openFilterCol === col ? null : col)
-                          }
-                          className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
-                        >
-                          {label}
-                          {filters[col]?.length > 0 && (
-                            <span className="bg-indigo-600 text-white text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
-                              {filters[col].length}
-                            </span>
-                          )}
-                          <span className="text-xs opacity-50">▾</span>
-                        </button>
-                        {openFilterCol === col && (
-                          <FilterDropdown
-                            options={filterOptions[col] || []}
-                            selected={filters[col] || []}
-                            onToggle={(value) => toggleFilter(col, value)}
-                            onClear={() => clearFilter(col)}
-                          />
-                        )}
-                      </th>
-                    ),
-                  )}
                   <th className="w-52 px-4 py-3 text-left font-semibold text-slate-600">
                     Note Vấn đề
                   </th>
@@ -855,24 +834,32 @@ export default function Students() {
                         key={student.id || student._id || idx}
                         className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}
                       >
-                        <td className="px-4 py-4 text-center">
+                        <td className={`px-4 py-4 text-center sticky left-0 z-[1] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
                           <input
                             type="checkbox"
-                            checked={selectedStudents.has(
-                              student.id || student._id,
-                            )}
-                            onChange={() =>
-                              handleToggleStudentSelection(
-                                student.id || student._id,
-                              )
-                            }
-                            className="rounded border-slate-300"
+                            checked={selectedStudents.has(student.id || student._id)}
+                            onChange={(e) => {
+                              const sid = student.id || student._id;
+                              if (e.nativeEvent.shiftKey && lastSelectedIdx !== null) {
+                                const start = Math.min(lastSelectedIdx, idx);
+                                const end = Math.max(lastSelectedIdx, idx);
+                                setSelectedStudents((prev) => {
+                                  const next = new Set(prev);
+                                  filteredStudents.slice(start, end + 1).forEach((s) => next.add(s.id || s._id));
+                                  return next;
+                                });
+                              } else {
+                                handleToggleStudentSelection(sid);
+                                setLastSelectedIdx(idx);
+                              }
+                            }}
+                            className="rounded border-slate-300 cursor-pointer"
                           />
                         </td>
-                        <td className="px-4 py-4 text-slate-800 font-medium whitespace-nowrap">
+                        <td className={`px-4 py-4 text-slate-800 font-medium whitespace-nowrap sticky left-10 z-[1] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
                           {student.name || "-"}
                         </td>
-                        <td className="px-4 py-4 text-blue-500 whitespace-nowrap">
+                        <td className={`px-4 py-4 text-blue-500 whitespace-nowrap sticky left-[200px] z-[1] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
                           {student.phone || "-"}
                         </td>
                         <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
@@ -939,81 +926,27 @@ export default function Students() {
                         <td className="px-4 py-4">
                           {renderStepCell(student, "call3")}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4">
                           <button
                             type="button"
-                            onClick={() => {
-                              const sid = student.id || student._id;
-                              const raw = student.scheduledAt;
-                              const d = raw ? new Date(raw) : null;
-                              const date = d
-                                ? d.toISOString().slice(0, 10)
-                                : "";
-                              const time = d
-                                ? d.toISOString().slice(11, 16)
-                                : "";
+                            onClick={() =>
                               setScheduleModal({
                                 open: true,
-                                studentId: sid,
-                                date,
-                                time,
+                                studentId: student.id || student._id,
+                                date: "",
+                                hour: "",
+                                minute: "00",
                                 consultantId:
                                   student.consultant?._id ||
                                   student.consultant?.id ||
                                   student.consultant ||
                                   "",
-                              });
-                            }}
-                            className="w-full text-left rounded-2xl border border-transparent px-2 py-1.5 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition"
+                              })
+                            }
+                            className="rounded-xl bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-100 transition"
                           >
-                            {student.scheduledAt ? (
-                              new Date(student.scheduledAt).toLocaleString(
-                                "vi-VN",
-                                { dateStyle: "short", timeStyle: "short" },
-                              )
-                            ) : (
-                              <span className="text-slate-400 text-xs">
-                                Chưa đặt
-                              </span>
-                            )}
+                            Hẹn lịch
                           </button>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          {editingStatus === (student.id || student._id) ? (
-                            <select
-                              value={student.status || "active"}
-                              onChange={(e) =>
-                                handleStatusChange(
-                                  student.id || student._id,
-                                  e.target.value,
-                                )
-                              }
-                              onBlur={() => setEditingStatus(null)}
-                              onFocus={(e) => {
-                                const el = e.currentTarget;
-                                setTimeout(() => el?.click(), 0);
-                              }}
-                              autoFocus
-                              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            >
-                              {Object.entries(statusConfig).map(
-                                ([key, cfg]) => (
-                                  <option key={key} value={key}>
-                                    {cfg.label}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                          ) : (
-                            <span
-                              onClick={() =>
-                                setEditingStatus(student.id || student._id)
-                              }
-                              className={`text-xs font-semibold px-2.5 py-1 rounded-lg border cursor-pointer hover:opacity-80 transition ${status.className}`}
-                            >
-                              {status.label}
-                            </span>
-                          )}
                         </td>
                         <td className="px-4 py-4 text-slate-700">
                           <div
@@ -1068,100 +1001,86 @@ export default function Students() {
         </div>
       )}
 
+      {assignResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl flex flex-col items-center gap-4">
+            {assignResult.type === "success" ? (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+                <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+                <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            )}
+            <p className="text-base font-bold text-slate-800 text-center">{assignResult.text}</p>
+            <button
+              type="button"
+              onClick={() => setAssignResult(null)}
+              className={`w-full rounded-2xl py-3 text-sm font-bold text-white transition ${assignResult.type === "success" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-500 hover:bg-red-600"}`}
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+
+      {scheduleResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl flex flex-col items-center gap-4">
+            {scheduleResult.type === "success" ? (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+                <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+                <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            )}
+            <p className="text-base font-bold text-slate-800 text-center">{scheduleResult.text}</p>
+            <button
+              type="button"
+              onClick={() => { setScheduleResult(null); if (scheduleResult.type === "error") { setPendingReload(false); loadStudents(); } }}
+              className={`w-full rounded-2xl py-3 text-sm font-bold text-white transition ${scheduleResult.type === "success" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-500 hover:bg-red-600"}`}
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+
       {scheduleModal.open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() =>
-            setScheduleModal({
-              open: false,
-              studentId: null,
-              date: "",
-              time: "",
-              consultantId: "",
-            })
-          }
+          onClick={closeScheduleModal}
         >
           <div
-            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
+            className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-base font-bold text-slate-900 mb-5">
-              Đặt lịch hẹn
-            </h2>
-            <div className="space-y-4">
-              <label className="block space-y-2 text-sm text-slate-700">
-                Ngày hẹn
-                <input
-                  type="date"
-                  value={scheduleModal.date}
-                  onChange={(e) =>
-                    setScheduleModal((prev) => ({
-                      ...prev,
-                      date: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                />
-              </label>
-              <label className="block space-y-2 text-sm text-slate-700">
-                Giờ hẹn
-                <input
-                  type="time"
-                  value={scheduleModal.time}
-                  onChange={(e) =>
-                    setScheduleModal((prev) => ({
-                      ...prev,
-                      time: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                />
-              </label>
-              <label className="block space-y-2 text-sm text-slate-700">
-                Tư vấn viên
-                <select
-                  value={scheduleModal.consultantId}
-                  onChange={(e) =>
-                    setScheduleModal((prev) => ({
-                      ...prev,
-                      consultantId: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
-                >
-                  <option value="">-- Chọn tư vấn viên --</option>
-                  {users.map((u) => (
-                    <option key={u._id || u.id} value={u._id || u.id}>
-                      {u.name || u.username || u.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={handleScheduleSave}
-                className="flex-1 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
-              >
-                Lưu
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setScheduleModal({
-                    open: false,
-                    studentId: null,
-                    date: "",
-                    time: "",
-                    consultantId: "",
-                  })
-                }
-                className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              >
-                Hủy
-              </button>
-            </div>
+            <h2 className="text-base font-bold text-slate-900 mb-5">Đặt lịch hẹn</h2>
+            <ScheduleForm
+              date={scheduleModal.date}
+              hour={scheduleModal.hour}
+              minute={scheduleModal.minute}
+              consultantId={scheduleModal.consultantId}
+              users={users}
+              onDateChange={(v) => setScheduleModal((p) => ({ ...p, date: v }))}
+              onHourChange={(v) => setScheduleModal((p) => ({ ...p, hour: v }))}
+              onMinuteChange={(v) => setScheduleModal((p) => ({ ...p, minute: v }))}
+              onConsultantChange={(v) => setScheduleModal((p) => ({ ...p, consultantId: v }))}
+              onSave={handleScheduleSave}
+              onCancel={closeScheduleModal}
+              saving={false}
+            />
           </div>
         </div>
       )}
@@ -1253,11 +1172,7 @@ export default function Students() {
                   ))}
                 </select>
               </label>
-              {assignMessage && (
-                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  {assignMessage}
-                </div>
-              )}
+
               <div className="flex gap-3 mt-2">
                 <button
                   type="submit"
