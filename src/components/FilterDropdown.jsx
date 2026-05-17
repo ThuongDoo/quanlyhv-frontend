@@ -1,6 +1,17 @@
-export default function FilterDropdown({ options, selected, onToggle, onClear }) {
-  return (
-    <div className="absolute top-full left-0 z-30 mt-1 min-w-[190px] rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+import { createPortal } from "react-dom";
+
+export default function FilterDropdown({ rect, options, selected, onToggle, onClear }) {
+  if (!rect) return null;
+
+  const style = {
+    position: "fixed",
+    top: rect.bottom + 4,
+    left: rect.left,
+    zIndex: 9999,
+  };
+
+  return createPortal(
+    <div style={style} className="min-w-[190px] rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden">
       <div className="max-h-56 overflow-y-auto p-1.5">
         {options.length === 0 ? (
           <div className="px-3 py-2 text-sm text-slate-400">Không có dữ liệu</div>
@@ -32,6 +43,7 @@ export default function FilterDropdown({ options, selected, onToggle, onClear })
           </button>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

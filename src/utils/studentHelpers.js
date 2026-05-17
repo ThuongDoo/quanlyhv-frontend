@@ -1,5 +1,5 @@
 import { STEP_CONFIG } from "../constants/studentConfig";
-import { fmtDateTime } from "./dateHelpers";
+import { fmtDateTime, toVNInputValue } from "./dateHelpers";
 
 export function getStep(student, key) {
   if (!student?.steps) return null;
@@ -34,14 +34,4 @@ export const formatStepSummary = (student, key) => {
   return resultLabel ? `${resultLabel}${noteLabel}` : "-";
 };
 
-export const formatStepInputValue = (value) => {
-  if (!value) return "";
-  try {
-    const date = new Date(value);
-    const offset = date.getTimezoneOffset();
-    const local = new Date(date.getTime() - offset * 60000);
-    return local.toISOString().slice(0, 16);
-  } catch {
-    return "";
-  }
-};
+export const formatStepInputValue = toVNInputValue;

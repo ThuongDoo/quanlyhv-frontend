@@ -43,6 +43,9 @@ export default function Students() {
   const [editingClassification, setEditingClassification] = useState(null);
   const [editingStatus, setEditingStatus] = useState(null);
   const [editingCampaign, setEditingCampaign] = useState(null);
+  const [editingOwner, setEditingOwner] = useState(null);
+  const [editingConsultant, setEditingConsultant] = useState(null);
+  const [editingManager, setEditingManager] = useState(null);
   const [editingStep, setEditingStep] = useState(null);
   const [editingProcessing, setEditingProcessing] = useState(null); // { id, date, shift }
   const [editingNoteId, setEditingNoteId] = useState(null);
@@ -115,6 +118,10 @@ export default function Students() {
         ...users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
       ],
       consultant: [
+        { value: "__empty__", label: "Trống" },
+        ...users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
+      ],
+      managerId: [
         { value: "__empty__", label: "Trống" },
         ...users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
       ],
@@ -331,6 +338,42 @@ export default function Students() {
     }
   };
 
+  const handleOwnerChange = async (studentId, userId) => {
+    const ownerUserId = userId || null;
+    setStudents((prev) => prev.map((s) => (s.id || s._id) === studentId ? { ...s, ownerUserId } : s));
+    setEditingOwner(null);
+    try {
+      await studentApi.updateStudent(studentId, { ownerUserId });
+    } catch (err) {
+      setError(err?.response?.data?.error || "Không thể cập nhật phụ trách.");
+      setPendingReload(true);
+    }
+  };
+
+  const handleConsultantChange = async (studentId, userId) => {
+    const consultant = userId || null;
+    setStudents((prev) => prev.map((s) => (s.id || s._id) === studentId ? { ...s, consultant } : s));
+    setEditingConsultant(null);
+    try {
+      await studentApi.updateStudent(studentId, { consultant });
+    } catch (err) {
+      setError(err?.response?.data?.error || "Không thể cập nhật tư vấn viên.");
+      setPendingReload(true);
+    }
+  };
+
+  const handleManagerChange = async (studentId, userId) => {
+    const managerId = userId || null;
+    setStudents((prev) => prev.map((s) => (s.id || s._id) === studentId ? { ...s, managerId } : s));
+    setEditingManager(null);
+    try {
+      await studentApi.updateStudent(studentId, { managerId });
+    } catch (err) {
+      setError(err?.response?.data?.error || "Không thể cập nhật quản lý.");
+      setPendingReload(true);
+    }
+  };
+
   const handleNoteSave = async (studentId) => {
     const draft = noteDraft;
     setStudents((prevStudents) =>
@@ -539,7 +582,7 @@ export default function Students() {
         studentId,
         appointmentDate: date,
         appointmentTime: time || null,
-        consultantId: consultantId || null,
+        consultantId,
       });
       setScheduleModal((p) => ({ ...p, saving: false, result: "success", resultMessage: "Đặt lịch hẹn thành công!" }));
     } catch (err) {
@@ -777,13 +820,15 @@ export default function Students() {
                 Đã chọn {selectedStudents.size} học viên
               </span>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={exportToExcel}
-                  className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                >
-                  Xuất Excel ({selectedStudents.size})
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={exportToExcel}
+                    className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                  >
+                    Xuất Excel ({selectedStudents.size})
+                  </button>
+                )}
                 {isAdmin && (
                   <>
                     <button
@@ -855,6 +900,7 @@ export default function Students() {
                     { col: "university", label: "Trường", width: "w-44" },
                     { col: "ownerUserId", label: "Sale Mới", width: "w-32" },
                     { col: "consultant", label: "Tư vấn viên", width: "w-32" },
+                    ...(isAdmin ? [{ col: "managerId", label: "Quản lý", width: "w-32" }] : []),
                     { col: "campaign", label: "Chiến dịch", width: "w-36" },
                   ].map(({ col, label, width }) => (
                     <th
@@ -1051,12 +1097,77 @@ export default function Students() {
                         <td className="px-4 py-4 text-slate-600 whitespace-nowrap">
                           {student.university || "-"}
                         </td>
-                        <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
-                          {consultantName}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {editingOwner === (student.id || student._id) ? (
+                            <select
+                              value={student.ownerUserId || ""}
+                              onChange={(e) => handleOwnerChange(student.id || student._id, e.target.value)}
+                              onBlur={() => setEditingOwner(null)}
+                              onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el?.click(), 0); }}
+                              autoFocus
+                              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-indigo-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                            >
+                              <option value="">— Trống —</option>
+                              {users.map((u) => <option key={u._id || u.id} value={u._id || u.id}>{u.name || u.username}</option>)}
+                            </select>
+                          ) : (
+                            <div
+                              onClick={() => isAdmin && setEditingOwner(student.id || student._id)}
+                              className={`rounded-xl border border-transparent px-2 py-1 text-sm text-slate-700 transition ${isAdmin ? "cursor-pointer hover:border-indigo-200 hover:bg-indigo-50" : ""}`}
+                            >
+                              {consultantName}
+                            </div>
+                          )}
                         </td>
-                        <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
-                          {tvvName}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {editingConsultant === (student.id || student._id) ? (
+                            <select
+                              value={typeof student.consultant === "string" ? student.consultant : student.consultant?._id || student.consultant?.id || ""}
+                              onChange={(e) => handleConsultantChange(student.id || student._id, e.target.value)}
+                              onBlur={() => setEditingConsultant(null)}
+                              onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el?.click(), 0); }}
+                              autoFocus
+                              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-emerald-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                            >
+                              <option value="">— Trống —</option>
+                              {users.map((u) => <option key={u._id || u.id} value={u._id || u.id}>{u.name || u.username}</option>)}
+                            </select>
+                          ) : (
+                            <div
+                              onClick={() => isAdmin && setEditingConsultant(student.id || student._id)}
+                              className={`rounded-xl border border-transparent px-2 py-1 text-sm text-slate-700 transition ${isAdmin ? "cursor-pointer hover:border-emerald-200 hover:bg-emerald-50" : ""}`}
+                            >
+                              {tvvName}
+                            </div>
+                          )}
                         </td>
+                        {isAdmin && (
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            {editingManager === (student.id || student._id) ? (
+                              <select
+                                value={student.managerId || ""}
+                                onChange={(e) => handleManagerChange(student.id || student._id, e.target.value)}
+                                onBlur={() => setEditingManager(null)}
+                                onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el?.click(), 0); }}
+                                autoFocus
+                                className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-violet-300 bg-white focus:outline-none focus:ring-2 focus:ring-violet-200"
+                              >
+                                <option value="">— Trống —</option>
+                                {users.map((u) => <option key={u._id || u.id} value={u._id || u.id}>{u.name || u.username}</option>)}
+                              </select>
+                            ) : (
+                              <div
+                                onClick={() => setEditingManager(student.id || student._id)}
+                                className="cursor-pointer rounded-xl border border-transparent px-2 py-1 text-sm text-slate-700 transition hover:border-violet-200 hover:bg-violet-50"
+                              >
+                                {(() => {
+                                  const mgr = users.find((u) => (u._id || u.id) === student.managerId);
+                                  return mgr?.name || mgr?.username || <span className="text-violet-300 text-xs">—</span>;
+                                })()}
+                              </div>
+                            )}
+                          </td>
+                        )}
                         <td className="px-4 py-4 whitespace-nowrap">
                           {isAdmin && editingCampaign === (student.id || student._id) ? (
                             <select

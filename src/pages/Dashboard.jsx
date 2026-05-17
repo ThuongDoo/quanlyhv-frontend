@@ -172,6 +172,14 @@ export default function Dashboard() {
               >
                 Tư vấn
               </button>
+              {user?.role === "admin" && (
+                <button
+                  onClick={() => setActiveSection("manager")}
+                  className={`px-4 py-1.5 text-xs font-bold transition border-l border-slate-200 ${activeSection === "manager" ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+                >
+                  Quản lý
+                </button>
+              )}
             </div>
           )}
           {showSwitch && <div className="w-px h-4 bg-slate-200 shrink-0" />}
@@ -230,10 +238,17 @@ export default function Dashboard() {
               filterValue={userId}
               {...sectionProps}
             />
-          ) : (
+          ) : activeSection === "consultant" ? (
             <AppointmentSection
               key="consultant"
               filterType="consultantId"
+              filterValue={userId}
+              {...sectionProps}
+            />
+          ) : (
+            <AppointmentSection
+              key="manager"
+              filterType="managerId"
               filterValue={userId}
               {...sectionProps}
             />

@@ -17,10 +17,33 @@ function NumberInput({ label, value, onChange, highlight }) {
       <input
         type="number"
         min={0}
+        inputMode="numeric"
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className={`w-full rounded-xl border px-4 py-3 text-center text-lg font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition ${highlight ? "bg-amber-50 border-amber-200" : "bg-white border-slate-200"}`}
+        onFocus={(e) => e.target.select()}
+        className={`w-full rounded-xl border px-4 py-3 text-center text-lg font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${highlight ? "bg-amber-50 border-amber-200" : "bg-white border-slate-200"}`}
       />
+    </div>
+  );
+}
+
+function DiemDanhSelect({ value, onChange }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+        Điểm danh
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-lg font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition"
+      >
+        <option value={0}>0</option>
+        <option value={0.25}>0.25</option>
+        <option value={0.5}>0.5</option>
+        <option value={0.75}>0.75</option>
+        <option value={1}>1</option>
+      </select>
     </div>
   );
 }
@@ -132,7 +155,7 @@ export default function ShiftPerformance() {
           <div className="flex flex-col gap-4">
             <h2 className="text-base font-extrabold text-slate-700">A. ĐẦU PHỄU</h2>
             <div className="grid grid-cols-3 gap-4">
-              <NumberInput label="Điểm danh" value={diemDanh} onChange={setDiemDanh} />
+              <DiemDanhSelect value={diemDanh} onChange={setDiemDanh} />
               <NumberInput label="Nhắc máy" value={nhacMay} onChange={setNhacMay} highlight="text-amber-500" />
               <NumberInput label="Gọi đặt lịch" value={goiDatLich} onChange={setGoiDatLich} highlight="text-blue-500" />
             </div>
@@ -160,9 +183,9 @@ export default function ShiftPerformance() {
             </div>
           </div>
 
-          {/* Message */}
-          {message && (
-            <div className={`rounded-2xl px-4 py-3 text-sm font-medium ${message.type === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+          {/* Lỗi inline */}
+          {message?.type === "error" && (
+            <div className="rounded-2xl px-4 py-3 text-sm font-medium bg-red-50 text-red-700 border border-red-200">
               {message.text}
             </div>
           )}
@@ -177,6 +200,27 @@ export default function ShiftPerformance() {
           </button>
         </form>
       </div>
+
+      {/* Success modal */}
+      {message?.type === "success" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl flex flex-col items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-base font-bold text-slate-800 text-center">{message.text}</p>
+            <button
+              type="button"
+              onClick={() => setMessage(null)}
+              className="w-full rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

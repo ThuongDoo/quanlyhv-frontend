@@ -149,12 +149,14 @@ export default function NhanSu() {
               defaultPassword="123456"
               templateFilename="mau_import_nhan_su"
               templateColumns={[
+                { key: "employeeId", example: "T12345" },
                 { key: "name", example: "Nguyễn Văn A" },
                 { key: "phone", example: "0987654321" },
-                { key: "email", example: "a@example.com" },
-                { key: "employeeId", example: "T12345" },
-                { key: "role", example: "sale" },
+                { key: "dateOfBirth", example: "2002-12-20" },
+                { key: "joinDate", example: "2024-01-15" },
                 { key: "university", example: "UIT" },
+                { key: "email", example: "a@example.com" },
+                { key: "role", example: "sale" },
               ]}
             />
             <button
