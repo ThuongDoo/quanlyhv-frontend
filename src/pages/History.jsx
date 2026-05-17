@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { shiftPerformanceApi } from "../services/shiftPerformance";
 import { SHIFTS, getTodayString } from "../constants/shifts";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 export default function History() {
   const [date, setDate] = useState(getTodayString);
@@ -22,7 +23,8 @@ export default function History() {
   }, [date]);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
+    <div className="h-full flex flex-col bg-slate-50 font-sans">
+      <LoadingOverlay show={loading} />
       <div className="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-10 shadow-sm">
         <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">
           Lịch sử Ca làm việc

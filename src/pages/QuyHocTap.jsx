@@ -3,6 +3,7 @@ import { penaltyApi } from "../services/nhanSu";
 import { authApi } from "../services/auth";
 import { useAuth } from "../hooks/useAuth";
 import { fmtDate } from "../utils/dateHelpers";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 const TRANG_THAI = {
   chua_nop: { label: "Chưa nộp", cls: "border-amber-200 bg-amber-50 text-amber-600" },
@@ -73,11 +74,15 @@ export default function QuyHocTap() {
   const [users, setUsers] = useState([]);
   const [savingId, setSavingId] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const load = () =>
+  const load = () => {
+    setLoading(true);
     penaltyApi.getAll({ limit: 100 })
       .then((res) => setList(res.penalties ?? []))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     load();
@@ -114,6 +119,7 @@ export default function QuyHocTap() {
 
   return (
     <div className="h-full flex flex-col bg-slate-50 font-sans">
+      <LoadingOverlay show={loading} />
       <div className="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-10 shadow-sm flex items-center justify-between">
         <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">🏦 Quỹ Học Tập</h1>
         <div className="flex items-center gap-3">

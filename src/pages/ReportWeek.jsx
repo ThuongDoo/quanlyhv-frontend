@@ -6,6 +6,7 @@ import {
 } from "../components/PerformanceReport";
 import { getTodayString } from "../constants/shifts";
 import { fmtDate } from "../utils/dateHelpers";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 export default function ReportWeek() {
   const [date] = useState(getTodayString);
@@ -25,6 +26,7 @@ export default function ReportWeek() {
 
   return (
     <div className="h-full flex flex-col bg-slate-50 font-sans">
+      <LoadingOverlay show={loading} />
       <div className="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-10 shadow-sm flex items-center justify-between gap-4">
         <div>
           <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">

@@ -4,6 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 import ImportExcel from "../components/ImportExcel";
 import { fmtDate } from "../utils/dateHelpers";
 import { ROLE_LABELS } from "../constants/studentConfig";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 const ROLE_OPTIONS = ["sale", "consultant", "admin"];
 
@@ -147,14 +148,18 @@ export default function NhanSu() {
 
   const [nhanSuList, setNhanSuList] = useState([]);
   const [modal, setModal] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const loadNhanSu = () =>
+  const loadNhanSu = () => {
+    setLoading(true);
     authApi
       .fetchUsers()
       .then((data) =>
         setNhanSuList(Array.isArray(data) ? data : (data.users ?? [])),
       )
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     loadNhanSu();
@@ -172,6 +177,7 @@ export default function NhanSu() {
 
   return (
     <div className="h-full flex flex-col bg-slate-50 font-sans">
+      <LoadingOverlay show={loading} />
       <div className="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-10 shadow-sm flex items-center justify-between">
         <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">
           🧑‍💻 Thông tin Nhân sự

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { shiftPerformanceApi } from "../services/shiftPerformance";
 import { PerformanceSummary, PerformanceTable } from "../components/PerformanceReport";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 const now = new Date();
 
@@ -26,6 +27,7 @@ export default function ReportMonth() {
 
   return (
     <div className="h-full flex flex-col bg-slate-50 font-sans">
+      <LoadingOverlay show={loading} />
       <div className="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-10 shadow-sm flex items-center justify-between gap-4">
         <div>
           <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">Báo cáo Tổng kết Tháng</h1>

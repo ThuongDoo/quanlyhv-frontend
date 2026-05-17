@@ -6,6 +6,7 @@ import { appointmentApi } from "../services/appointments";
 import { getUser } from "../hooks/useAuth";
 import StepCell from "../components/StepCell";
 import ScheduleForm from "../components/ScheduleForm";
+import LoadingOverlay from "../components/LoadingOverlay";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import FilterDropdown from "../components/FilterDropdown";
@@ -483,6 +484,7 @@ export default function Students() {
 
   return (
     <div className="h-full flex flex-col bg-slate-50 font-sans">
+      <LoadingOverlay show={loading} />
       <div className="bg-white border-b border-slate-200 px-6 py-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between  top-0 z-10 shadow-sm">
         <div className="flex items-center gap-3">
           <div>

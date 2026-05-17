@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { shiftPerformanceApi } from "../services/shiftPerformance";
 import { SHIFTS, getCurrentShift, getTodayString } from "../constants/shifts";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 function getWeekOfMonth(date) {
   const d = new Date(date);
@@ -97,6 +98,7 @@ export default function ShiftPerformance() {
 
   return (
     <div className="h-full flex flex-col bg-slate-100 font-sans">
+      <LoadingOverlay show={loading} />
       {/* Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-3 shadow-sm">
         <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">

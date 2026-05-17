@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { resourceApi, meetingMinutesApi } from "../services/resource";
 import { useAuth } from "../hooks/useAuth";
 import { fmtDate } from "../utils/dateHelpers";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 function monthBadge(iso) {
   if (!iso) return null;
@@ -121,11 +122,15 @@ export default function TaiNguyen() {
   const [expandedId, setExpandedId] = useState(null);
   const [resourceModal, setResourceModal] = useState(null);
   const [meetingModal, setMeetingModal] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const loadResources = () => resourceApi.getAll().then(setResources).catch(() => {});
   const loadMeetings = () => meetingMinutesApi.getAll().then(setMeetings).catch(() => {});
 
-  useEffect(() => { loadResources(); loadMeetings(); }, []);
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([loadResources(), loadMeetings()]).finally(() => setLoading(false));
+  }, []);
 
   const deleteResource = async (r) => {
     if (!window.confirm(`Xoá "${r.name}"?`)) return;
@@ -141,6 +146,7 @@ export default function TaiNguyen() {
 
   return (
     <div className="h-full flex flex-col bg-slate-50 font-sans">
+      <LoadingOverlay show={loading} />
       <div className="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-10 shadow-sm">
         <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">🔗 Tài nguyên & Link</h1>
       </div>

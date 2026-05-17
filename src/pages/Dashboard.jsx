@@ -8,6 +8,7 @@ import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import DateInput from "../components/DateInput";
 import { classificationConfig, statusConfig, ROLE_CONFIG } from "../constants/studentConfig";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 const APPOINTMENT_STATUS = {
   ...statusConfig,
@@ -93,9 +94,8 @@ function AppointmentSection({
 
   return (
     <div className="flex flex-col gap-4">
-      {loading ? (
-        <div className="text-center text-slate-400 py-10 text-sm">Đang tải...</div>
-      ) : filtered.length === 0 ? (
+      <LoadingOverlay show={loading} />
+      {filtered.length === 0 && !loading ? (
         <div className="text-center text-slate-400 py-10 text-sm">Không có lịch hẹn nào.</div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
