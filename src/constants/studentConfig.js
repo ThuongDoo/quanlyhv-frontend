@@ -93,8 +93,12 @@ export const STEP_CONFIG = {
   },
 };
 
-export const ROLE_LABELS = {
-  sale: "Sale",
-  consultant: "Tư vấn",
-  admin: "Quản lý",
+export const ROLE_CONFIG = {
+  sale:       { label: "Sale",     className: "bg-amber-100 text-amber-700 border-amber-200" },
+  consultant: { label: "Tư vấn",   className: "bg-blue-100 text-blue-700 border-blue-200" },
+  admin:      { label: "Quản lý",  className: "bg-red-100 text-red-700 border-red-200" },
 };
+
+export const ROLE_LABELS = Object.fromEntries(
+  Object.entries(ROLE_CONFIG).map(([k, v]) => [k, v.label])
+);

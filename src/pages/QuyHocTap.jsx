@@ -113,7 +113,7 @@ export default function QuyHocTap() {
   const chuaNop = list.filter((r) => r.trangThai === "chua_nop").length;
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
+    <div className="h-full flex flex-col bg-slate-50 font-sans">
       <div className="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-10 shadow-sm flex items-center justify-between">
         <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">🏦 Quỹ Học Tập</h1>
         <div className="flex items-center gap-3">
@@ -133,12 +133,12 @@ export default function QuyHocTap() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="bg-white rounded-2xl border-2 border-red-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+      <div className="flex-1 min-h-0 px-6 py-6 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border-2 border-red-200 shadow-sm overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-auto">
             <table className="w-full text-sm text-slate-700">
-              <thead>
-                <tr className="text-[11px] font-bold uppercase tracking-widest text-slate-500 bg-slate-50">
+              <thead className="sticky top-0 z-[3] bg-slate-50 shadow-sm">
+                <tr className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
                   <th className="px-4 py-3 text-left text-red-400">Họ Tên</th>
                   <th className="px-3 py-3 text-center text-red-400">Ngày</th>
                   <th className="px-3 py-3 text-left text-red-400">Lý do lỗi</th>

@@ -1,5 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as XLSX from "xlsx";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDebounce } from "../hooks/useDebounce";
 import { studentApi } from "../services/students";
 import { authApi } from "../services/auth";
@@ -8,18 +7,12 @@ import StepCell from "../components/StepCell";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import FilterDropdown from "../components/FilterDropdown";
-import ImportExcel from "../components/ImportExcel";
-import ScheduleForm from "../components/ScheduleForm";
-import { fmtDate, fmtDateTime } from "../utils/dateHelpers";
-import { appointmentApi } from "../services/appointments";
 import {
   classificationConfig,
   statusConfig,
   STEP_CONFIG,
   MOBILE_CARRIER_OPTIONS,
 } from "../constants/studentConfig";
-
-
 
 export default function Students() {
   const currentUser = getUser();
@@ -40,18 +33,15 @@ export default function Students() {
   const [error, setError] = useState("");
   const [pendingReload, setPendingReload] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importMessage, setImportMessage] = useState("");
   const [editingClassification, setEditingClassification] = useState(null);
   const [editingStatus, setEditingStatus] = useState(null);
-  const [editingCampaign, setEditingCampaign] = useState(null);
-  const [editingOwner, setEditingOwner] = useState(null);
-  const [editingConsultant, setEditingConsultant] = useState(null);
-  const [editingManager, setEditingManager] = useState(null);
   const [editingStep, setEditingStep] = useState(null);
-  const [editingProcessing, setEditingProcessing] = useState(null); // { id, date, shift }
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [selectedStudents, setSelectedStudents] = useState(new Set());
-  const lastClickedIndex = useRef(null);
   const [showAssignPanel, setShowAssignPanel] = useState(false);
   const [assignUserId, setAssignUserId] = useState("");
   const [assignMessage, setAssignMessage] = useState("");
@@ -59,7 +49,6 @@ export default function Students() {
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [universities, setUniversities] = useState([]);
-  const [campaigns, setCampaigns] = useState([]);
   const [filters, setFilters] = useState({});
   const [openFilterCol, setOpenFilterCol] = useState(null);
   const [scheduleModal, setScheduleModal] = useState({
@@ -68,9 +57,6 @@ export default function Students() {
     date: "",
     time: "",
     consultantId: "",
-    saving: false,
-    result: null, // "success" | "error"
-    resultMessage: "",
   });
   const [newStudent, setNewStudent] = useState({
     name: "",
@@ -109,22 +95,14 @@ export default function Students() {
         ([value, cfg]) => ({ value, label: cfg.label }),
       ),
       university: universities.map((v) => ({ value: v, label: v })),
-      campaign: [
-        { value: "__empty__", label: "Trống" },
-        ...campaigns.map((c) => ({ value: c, label: c })),
-      ],
-      ownerUserId: [
-        { value: "__empty__", label: "Trống" },
-        ...users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
-      ],
-      consultant: [
-        { value: "__empty__", label: "Trống" },
-        ...users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
-      ],
-      managerId: [
-        { value: "__empty__", label: "Trống" },
-        ...users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
-      ],
+      ownerUserId: unique(students.map((s) => s.ownerUserId)).map((id) => {
+        const u = users.find((x) => (x._id || x.id) === id);
+        return { value: id, label: u?.name || u?.username || id };
+      }),
+      consultant: users.map((u) => ({
+        value: u._id || u.id,
+        label: u.name || u.username || u.email,
+      })),
       status: Object.entries(statusConfig).map(([value, cfg]) => ({
         value,
         label: cfg.label,
@@ -136,46 +114,14 @@ export default function Students() {
     };
   }, [students, users, universities]);
 
+  // Only clasification is filtered client-side (backend doesn't support it).
+  // All other filters are sent as query params to the API.
   const filteredStudents = useMemo(() => {
-    let result = students;
-
-    if (filters.clasification?.length) {
-      result = result.filter((s) => filters.clasification.includes(s.clasification || "0"));
-    }
-
-    if (filters.ownerUserId?.length) {
-      result = result.filter((s) => {
-        const hasEmpty = filters.ownerUserId.includes("__empty__");
-        const ids = filters.ownerUserId.filter((v) => v !== "__empty__");
-        if (hasEmpty && !s.ownerUserId) return true;
-        if (ids.length && ids.includes(s.ownerUserId)) return true;
-        return false;
-      });
-    }
-
-    if (filters.consultant?.length) {
-      result = result.filter((s) => {
-        const cId = s.consultant?._id || s.consultant?.id || (typeof s.consultant === "string" ? s.consultant : null);
-        const hasEmpty = filters.consultant.includes("__empty__");
-        const ids = filters.consultant.filter((v) => v !== "__empty__");
-        if (hasEmpty && !cId) return true;
-        if (ids.length && ids.includes(cId)) return true;
-        return false;
-      });
-    }
-
-    if (filters.campaign?.length) {
-      result = result.filter((s) => {
-        const hasEmpty = filters.campaign.includes("__empty__");
-        const vals = filters.campaign.filter((v) => v !== "__empty__");
-        if (hasEmpty && !s.campaign) return true;
-        if (vals.length && vals.includes(s.campaign)) return true;
-        return false;
-      });
-    }
-
-    return result;
-  }, [students, filters.clasification, filters.ownerUserId, filters.consultant, filters.campaign]);
+    if (!filters.clasification?.length) return students;
+    return students.filter((s) =>
+      filters.clasification.includes(s.clasification || "0"),
+    );
+  }, [students, filters.clasification]);
 
   const loadStudents = useCallback(async () => {
     try {
@@ -184,6 +130,7 @@ export default function Students() {
       if (filters.mobileCarrier?.length)
         params.mobileCarrier = filters.mobileCarrier;
       if (filters.university?.length) params.university = filters.university;
+      if (filters.ownerUserId?.length) params.ownerUserId = filters.ownerUserId;
       if (filters.status?.length) params.status = filters.status;
       if (filters.currentStepKey?.length)
         params.currentStepKey = filters.currentStepKey[0] ?? "null";
@@ -230,13 +177,8 @@ export default function Students() {
   }, []);
 
   useEffect(() => {
-    studentApi.fetchCampaigns().then((data) => setCampaigns(Array.isArray(data) ? data : [])).catch(() => {});
-  }, []);
-
-  useEffect(() => {
     setPage(1);
   }, [search]);
-
 
   const handleCreateSubmit = async (event) => {
     event.preventDefault();
@@ -262,6 +204,27 @@ export default function Students() {
     } catch (err) {
       setError(
         err?.response?.data?.error || err?.message || "Không thể tạo học viên.",
+      );
+    }
+  };
+
+  const handleImportSubmit = async (event) => {
+    event.preventDefault();
+    if (!importFile) {
+      setImportMessage("Vui lòng chọn file Excel trước khi import.");
+      return;
+    }
+
+    try {
+      const response = await studentApi.importStudents(importFile);
+      console.log(response);
+
+      setImportMessage(response.message || "Import hoàn tất.");
+      setImportFile(null);
+      loadStudents();
+    } catch (err) {
+      setImportMessage(
+        err?.response?.data?.error || err?.message || "Import thất bại.",
       );
     }
   };
@@ -299,77 +262,11 @@ export default function Students() {
     try {
       await studentApi.updateStudent(studentId, { status: newStatus });
     } catch (err) {
-      setError(err?.response?.data?.error || err?.message || "Không thể cập nhật trạng thái.");
-      setPendingReload(true);
-    }
-  };
-
-  const handleCampaignChange = async (studentId, value) => {
-    const campaign = value.trim() || null;
-    setStudents((prev) =>
-      prev.map((s) => (s.id || s._id) === studentId ? { ...s, campaign } : s)
-    );
-    setEditingCampaign(null);
-    if (!campaigns.includes(campaign) && campaign) {
-      setCampaigns((prev) => [...prev, campaign].sort());
-    }
-    try {
-      await studentApi.updateStudent(studentId, { campaign });
-    } catch (err) {
-      setError(err?.response?.data?.error || "Không thể cập nhật chiến dịch.");
-      setPendingReload(true);
-    }
-  };
-
-  const handleProcessingSave = async () => {
-    if (!editingProcessing) return;
-    const { id, date, shift } = editingProcessing;
-    const processingDate = date || null;
-    const processingShift = shift || null;
-    setStudents((prev) =>
-      prev.map((s) => (s.id || s._id) === id ? { ...s, processingDate, processingShift } : s)
-    );
-    setEditingProcessing(null);
-    try {
-      await studentApi.updateStudent(id, { processingDate, processingShift });
-    } catch (err) {
-      setError(err?.response?.data?.error || err?.message || "Không thể cập nhật thời gian xử lý.");
-      setPendingReload(true);
-    }
-  };
-
-  const handleOwnerChange = async (studentId, userId) => {
-    const ownerUserId = userId || null;
-    setStudents((prev) => prev.map((s) => (s.id || s._id) === studentId ? { ...s, ownerUserId } : s));
-    setEditingOwner(null);
-    try {
-      await studentApi.updateStudent(studentId, { ownerUserId });
-    } catch (err) {
-      setError(err?.response?.data?.error || "Không thể cập nhật phụ trách.");
-      setPendingReload(true);
-    }
-  };
-
-  const handleConsultantChange = async (studentId, userId) => {
-    const consultant = userId || null;
-    setStudents((prev) => prev.map((s) => (s.id || s._id) === studentId ? { ...s, consultant } : s));
-    setEditingConsultant(null);
-    try {
-      await studentApi.updateStudent(studentId, { consultant });
-    } catch (err) {
-      setError(err?.response?.data?.error || "Không thể cập nhật tư vấn viên.");
-      setPendingReload(true);
-    }
-  };
-
-  const handleManagerChange = async (studentId, userId) => {
-    const managerId = userId || null;
-    setStudents((prev) => prev.map((s) => (s.id || s._id) === studentId ? { ...s, managerId } : s));
-    setEditingManager(null);
-    try {
-      await studentApi.updateStudent(studentId, { managerId });
-    } catch (err) {
-      setError(err?.response?.data?.error || "Không thể cập nhật quản lý.");
+      setError(
+        err?.response?.data?.error ||
+          err?.message ||
+          "Không thể cập nhật trạng thái.",
+      );
       setPendingReload(true);
     }
   };
@@ -399,28 +296,16 @@ export default function Students() {
     }
   };
 
-  const handleToggleStudentSelection = (studentId, idx, shiftKey) => {
-    if (shiftKey && lastClickedIndex.current !== null) {
-      const start = Math.min(lastClickedIndex.current, idx);
-      const end = Math.max(lastClickedIndex.current, idx);
-      const rangeIds = filteredStudents.slice(start, end + 1).map((s) => s.id || s._id);
-      setSelectedStudents((prev) => {
-        const newSet = new Set(prev);
-        rangeIds.forEach((id) => newSet.add(id));
-        return newSet;
-      });
-    } else {
-      lastClickedIndex.current = idx;
-      setSelectedStudents((prev) => {
-        const newSet = new Set(prev);
-        if (newSet.has(studentId)) {
-          newSet.delete(studentId);
-        } else {
-          newSet.add(studentId);
-        }
-        return newSet;
-      });
-    }
+  const handleToggleStudentSelection = (studentId) => {
+    setSelectedStudents((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(studentId)) {
+        newSet.delete(studentId);
+      } else {
+        newSet.add(studentId);
+      }
+      return newSet;
+    });
   };
 
   const handleSelectAllStudents = (selectAll) => {
@@ -430,40 +315,6 @@ export default function Students() {
     } else {
       setSelectedStudents(new Set());
     }
-  };
-
-  const exportToExcel = () => {
-    const selected = filteredStudents.filter((s) => selectedStudents.has(s.id || s._id));
-    const SHIFT_MAP = { S: "Sáng", C: "Chiều", T: "Tối" };
-
-    const rows = selected.map((s) => {
-      const ownerId = s.ownerUserId;
-      const ownerName = users.find((u) => (u._id || u.id) === ownerId)?.name || "";
-      const cId = s.consultant?._id || s.consultant?.id || (typeof s.consultant === "string" ? s.consultant : null);
-      const tvvName = users.find((u) => (u._id || u.id) === cId)?.name || s.consultant?.name || "";
-      const processingTime = s.processingDate
-        ? `${fmtDate(s.processingDate)}${s.processingShift ? " - " + SHIFT_MAP[s.processingShift] : ""}`
-        : "";
-
-      return {
-        "Họ Tên": s.name || "",
-        "SĐT": s.phone || "",
-        "Năm": s.year || "",
-        "Nhà mạng": s.mobileCarrier || "",
-        "Phân loại": classificationConfig[s.clasification || "0"]?.label || "",
-        "Trường": s.university || "",
-        "Sale Mới": ownerName,
-        "Tư vấn viên": tvvName,
-        "TG Xử lý": processingTime,
-        "Trạng thái": statusConfig[s.status]?.label || s.status || "",
-        "Note": Array.isArray(s.insights) ? s.insights[0] || "" : s.insights || "",
-      };
-    });
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Học viên");
-    XLSX.writeFile(wb, `hoc-vien-${Date.now()}.xlsx`);
   };
 
   const openAssignPanel = async () => {
@@ -576,21 +427,33 @@ export default function Students() {
 
   const handleScheduleSave = async () => {
     const { studentId, date, time, consultantId } = scheduleModal;
-    setScheduleModal((p) => ({ ...p, saving: true, result: null }));
+    const scheduledAt = date ? `${date}T${time || "00:00"}` : null;
+    setStudents((prev) =>
+      prev.map((s) =>
+        (s.id || s._id) === studentId
+          ? { ...s, consultant: consultantId, scheduledAt }
+          : s,
+      ),
+    );
+    setScheduleModal({
+      open: false,
+      studentId: null,
+      date: "",
+      time: "",
+      consultantId: "",
+    });
     try {
-      await appointmentApi.create({
-        studentId,
-        appointmentDate: date,
-        appointmentTime: time || null,
+      await studentApi.scheduleStudent(studentId, {
         consultantId,
+        scheduledAt,
       });
-      setScheduleModal((p) => ({ ...p, saving: false, result: "success", resultMessage: "Đặt lịch hẹn thành công!" }));
     } catch (err) {
-      setScheduleModal((p) => ({ ...p, saving: false, result: "error", resultMessage: err?.response?.data?.error || "Đặt lịch thất bại." }));
+      setError(
+        err?.response?.data?.error || err?.message || "Không thể đặt lịch hẹn.",
+      );
+      setPendingReload(true);
     }
   };
-
-  const closeScheduleModal = () => setScheduleModal({ open: false, studentId: null, date: "", time: "", consultantId: "", saving: false, result: null, resultMessage: "" });
 
   const renderStepCell = (student, key) => {
     return (
@@ -605,10 +468,16 @@ export default function Students() {
   };
 
   const totalPages = pagination.totalPages || 1;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
-      <div className="bg-white border-b border-slate-200 px-6 py-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between sticky top-0 z-10 shadow-sm">
+    <div className="h-full flex flex-col bg-slate-50 font-sans">
+      <div className="bg-white border-b border-slate-200 px-6 py-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between  top-0 z-10 shadow-sm">
         <div className="flex items-center gap-3">
           <div>
             <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">
@@ -636,77 +505,66 @@ export default function Students() {
               + Thêm học viên
             </button>
             {isAdmin && (
-              <ImportExcel
-                onImport={async (file) => { const res = await studentApi.importStudents(file); loadStudents(); return res; }}
-                label="Nhập Excel"
-                templateFilename="mau_import_hoc_vien"
-                templateColumns={[
-                  { key: "name", example: "Nguyễn Văn A" },
-                  { key: "phone", example: "0987654321" },
-                  { key: "year", example: 2005 },
-                  { key: "university", example: "UIT" },
-                  { key: "mobileCarrier", example: "viettel" },
-                  { key: "campaign", example: "Chiến dịch 2025" },
-                ]}
-              />
+              <button
+                type="button"
+                onClick={() => setShowImportPanel((value) => !value)}
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Nhập Excel
+              </button>
             )}
           </div>
         </div>
       </div>
 
-      {(openFilterCol || editingProcessing) && (
+      {openFilterCol && (
         <div
           className="fixed inset-0 z-20"
-          onClick={() => { setOpenFilterCol(null); setEditingProcessing(null); }}
+          onClick={() => setOpenFilterCol(null)}
         />
       )}
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            Bước hiện tại:
-          </span>
-          {[
-            { value: "", label: "Tất cả" },
-            { value: null, label: "Chưa xử lý" },
-            ...Object.entries(STEP_CONFIG).map(([v, c]) => ({
-              value: v,
-              label: c.label,
-            })),
-          ].map(({ value, label }) => {
-            const current = filters.currentStepKey?.length
-              ? filters.currentStepKey[0]
-              : "";
-            const active = current === value;
-            return (
-              <button
-                key={value ?? "__null__"}
-                type="button"
-                onClick={() => {
-                  setFilters((prev) => ({
-                    ...prev,
-                    currentStepKey: value === "" ? [] : [value],
-                  }));
-                  setPage(1);
-                }}
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition border ${active ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"}`}
-              >
-                {label}
-              </button>
-            );
-          })}
-          {activeFilterCount > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setFilters({});
+      <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-6 py-4 flex flex-col gap-4 overflow-hidden">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide shrink-0">
+              Bước hiện tại:
+            </span>
+            <select
+              value={filters.currentStepKey?.length ? (filters.currentStepKey[0] ?? "__null__") : ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                setFilters((prev) => ({
+                  ...prev,
+                  currentStepKey: val === "" ? [] : [val === "__null__" ? null : val],
+                }));
                 setPage(1);
               }}
-              className="ml-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-500 hover:bg-red-100 transition"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
             >
-              Xóa tất cả ({activeFilterCount})
-            </button>
-          )}
+              <option value="">Tất cả</option>
+              <option value="__null__">Chưa xử lý</option>
+              {Object.entries(STEP_CONFIG).map(([v, c]) => (
+                <option key={v} value={v}>{c.label}</option>
+              ))}
+            </select>
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={() => { setFilters({}); setPage(1); }}
+                className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-500 hover:bg-red-100 transition"
+              >
+                Xóa tất cả ({activeFilterCount})
+              </button>
+            )}
+          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={pagination.total || 0}
+            limit={limit}
+            onPageChange={setPage}
+          />
         </div>
 
         {showCreatePanel && (
@@ -813,7 +671,7 @@ export default function Students() {
           </div>
         )}
 
-        <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex-1 min-h-0 flex flex-col rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           {selectedStudents.size > 0 && (
             <div className="flex items-center justify-between px-6 py-3 bg-indigo-50 border-b border-indigo-200">
               <span className="text-sm font-semibold text-indigo-700">
@@ -823,40 +681,11 @@ export default function Students() {
                 {isAdmin && (
                   <button
                     type="button"
-                    onClick={exportToExcel}
-                    className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                    onClick={openAssignPanel}
+                    className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
                   >
-                    Xuất Excel ({selectedStudents.size})
+                    Gán cho người dùng
                   </button>
-                )}
-                {isAdmin && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={openAssignPanel}
-                      className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
-                    >
-                      Gán cho người dùng
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const ids = Array.from(selectedStudents);
-                        if (!window.confirm(`Xoá ${ids.length} học viên đã chọn?`)) return;
-                        setStudents((prev) => prev.filter((s) => !ids.includes(s.id || s._id)));
-                        setSelectedStudents(new Set());
-                        try {
-                          await Promise.all(ids.map((id) => studentApi.deleteStudent(id)));
-                        } catch (err) {
-                          setError(err?.response?.data?.error || "Xoá thất bại.");
-                          setPendingReload(true);
-                        }
-                      }}
-                      className="rounded-2xl bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600"
-                    >
-                      Xoá {selectedStudents.size} học viên
-                    </button>
-                  </>
                 )}
                 <button
                   type="button"
@@ -868,11 +697,11 @@ export default function Students() {
               </div>
             </div>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full table-fixed text-sm border-collapse">
-              <thead className="border-b border-slate-200 bg-slate-50">
-                <tr className="divide-x divide-slate-200">
-                  <th className="w-10 px-4 py-3 text-center sticky left-0 z-[2] bg-slate-50">
+          <div className="flex-1 min-h-0 overflow-auto">
+            <table className="w-full table-fixed text-sm">
+              <thead className="sticky top-0 z-[3] border-b border-slate-200 bg-slate-50 shadow-sm">
+                <tr>
+                  <th className="w-10 px-4 py-3 text-center">
                     <input
                       type="checkbox"
                       checked={
@@ -885,10 +714,10 @@ export default function Students() {
                       className="rounded border-slate-300"
                     />
                   </th>
-                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600 sticky left-10 z-[2] bg-slate-50">
+                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600">
                     Họ Tên
                   </th>
-                  <th className="w-32 px-4 py-3 text-left font-semibold text-slate-600 sticky left-[200px] z-[2] bg-slate-50">
+                  <th className="w-32 px-4 py-3 text-left font-semibold text-slate-600">
                     SĐT
                   </th>
                   <th className="w-16 px-4 py-3 text-left font-semibold text-slate-600">
@@ -899,9 +728,6 @@ export default function Students() {
                     { col: "clasification", label: "Phân Loại", width: "w-28" },
                     { col: "university", label: "Trường", width: "w-44" },
                     { col: "ownerUserId", label: "Sale Mới", width: "w-32" },
-                    { col: "consultant", label: "Tư vấn viên", width: "w-32" },
-                    ...(isAdmin ? [{ col: "managerId", label: "Quản lý", width: "w-32" }] : []),
-                    { col: "campaign", label: "Chiến dịch", width: "w-36" },
                   ].map(({ col, label, width }) => (
                     <th
                       key={col}
@@ -932,9 +758,6 @@ export default function Students() {
                       )}
                     </th>
                   ))}
-                  <th className="w-40 px-4 py-3 text-left font-semibold text-slate-600">
-                    TG Xử lý
-                  </th>
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Làm Ấm
                   </th>
@@ -947,8 +770,8 @@ export default function Students() {
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Liên hệ Lần 3
                   </th>
-                  <th className="w-28 px-4 py-3 text-center font-semibold text-slate-600">
-                    Đặt lịch
+                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
+                    Lịch hẹn
                   </th>
                   {[{ col: "status", label: "Đã Đến", width: "w-28" }].map(
                     ({ col, label, width }) => (
@@ -1010,17 +833,13 @@ export default function Students() {
                   filteredStudents.map((student, idx) => {
                     const classification =
                       classificationConfig[student.clasification || "0"];
-                    const status = statusConfig[student.status] || Object.values(statusConfig)[0];
+                    const status =
+                      statusConfig[student.status] ||
+                      Object.values(statusConfig)[0];
                     const ownerId = student.ownerUserId;
                     const ownerUser = users.find(
                       (u) => (u._id || u.id) === ownerId,
                     );
-                    const consultantId =
-                      student.consultant?._id ||
-                      student.consultant?.id ||
-                      (typeof student.consultant === "string" ? student.consultant : null);
-                    const consultantUser = users.find((u) => (u._id || u.id) === consultantId);
-                    const tvvName = consultantUser?.name || student.consultant?.name || "-";
                     const consultantName =
                       ownerUser?.name ||
                       ownerUser?.username ||
@@ -1034,22 +853,26 @@ export default function Students() {
                     return (
                       <tr
                         key={student.id || student._id || idx}
-                        className={`divide-x divide-slate-200 border-b border-slate-100 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}
+                        className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}
                       >
-                        <td className="px-4 py-4 text-center sticky left-0 z-[1] bg-inherit">
+                        <td className="px-4 py-4 text-center">
                           <input
                             type="checkbox"
-                            checked={selectedStudents.has(student.id || student._id)}
-                            onChange={() => {}}
-                            onClick={(e) => handleToggleStudentSelection(student.id || student._id, idx, e.shiftKey)}
-                            onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
-                            className="rounded border-slate-300 cursor-pointer"
+                            checked={selectedStudents.has(
+                              student.id || student._id,
+                            )}
+                            onChange={() =>
+                              handleToggleStudentSelection(
+                                student.id || student._id,
+                              )
+                            }
+                            className="rounded border-slate-300"
                           />
                         </td>
-                        <td className="px-4 py-4 text-slate-800 font-medium whitespace-nowrap sticky left-10 z-[1] bg-inherit">
+                        <td className="px-4 py-4 text-slate-800 font-medium whitespace-nowrap">
                           {student.name || "-"}
                         </td>
-                        <td className="px-4 py-4 text-blue-500 whitespace-nowrap sticky left-[200px] z-[1] bg-inherit">
+                        <td className="px-4 py-4 text-blue-500 whitespace-nowrap">
                           {student.phone || "-"}
                         </td>
                         <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
@@ -1077,9 +900,13 @@ export default function Students() {
                               autoFocus
                               className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
                             >
-                              {Object.entries(classificationConfig).map(([key, cfg]) => (
-                                <option key={key} value={key}>{cfg.label}</option>
-                              ))}
+                              {Object.entries(classificationConfig).map(
+                                ([key, cfg]) => (
+                                  <option key={key} value={key}>
+                                    {cfg.label}
+                                  </option>
+                                ),
+                              )}
                             </select>
                           ) : (
                             <span
@@ -1097,168 +924,8 @@ export default function Students() {
                         <td className="px-4 py-4 text-slate-600 whitespace-nowrap">
                           {student.university || "-"}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          {editingOwner === (student.id || student._id) ? (
-                            <select
-                              value={student.ownerUserId || ""}
-                              onChange={(e) => handleOwnerChange(student.id || student._id, e.target.value)}
-                              onBlur={() => setEditingOwner(null)}
-                              onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el?.click(), 0); }}
-                              autoFocus
-                              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-indigo-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                            >
-                              <option value="">— Trống —</option>
-                              {users.map((u) => <option key={u._id || u.id} value={u._id || u.id}>{u.name || u.username}</option>)}
-                            </select>
-                          ) : (
-                            <div
-                              onClick={() => isAdmin && setEditingOwner(student.id || student._id)}
-                              className={`rounded-xl border border-transparent px-2 py-1 text-sm text-slate-700 transition ${isAdmin ? "cursor-pointer hover:border-indigo-200 hover:bg-indigo-50" : ""}`}
-                            >
-                              {consultantName}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          {editingConsultant === (student.id || student._id) ? (
-                            <select
-                              value={typeof student.consultant === "string" ? student.consultant : student.consultant?._id || student.consultant?.id || ""}
-                              onChange={(e) => handleConsultantChange(student.id || student._id, e.target.value)}
-                              onBlur={() => setEditingConsultant(null)}
-                              onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el?.click(), 0); }}
-                              autoFocus
-                              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-emerald-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                            >
-                              <option value="">— Trống —</option>
-                              {users.map((u) => <option key={u._id || u.id} value={u._id || u.id}>{u.name || u.username}</option>)}
-                            </select>
-                          ) : (
-                            <div
-                              onClick={() => isAdmin && setEditingConsultant(student.id || student._id)}
-                              className={`rounded-xl border border-transparent px-2 py-1 text-sm text-slate-700 transition ${isAdmin ? "cursor-pointer hover:border-emerald-200 hover:bg-emerald-50" : ""}`}
-                            >
-                              {tvvName}
-                            </div>
-                          )}
-                        </td>
-                        {isAdmin && (
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            {editingManager === (student.id || student._id) ? (
-                              <select
-                                value={student.managerId || ""}
-                                onChange={(e) => handleManagerChange(student.id || student._id, e.target.value)}
-                                onBlur={() => setEditingManager(null)}
-                                onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el?.click(), 0); }}
-                                autoFocus
-                                className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-violet-300 bg-white focus:outline-none focus:ring-2 focus:ring-violet-200"
-                              >
-                                <option value="">— Trống —</option>
-                                {users.map((u) => <option key={u._id || u.id} value={u._id || u.id}>{u.name || u.username}</option>)}
-                              </select>
-                            ) : (
-                              <div
-                                onClick={() => setEditingManager(student.id || student._id)}
-                                className="cursor-pointer rounded-xl border border-transparent px-2 py-1 text-sm text-slate-700 transition hover:border-violet-200 hover:bg-violet-50"
-                              >
-                                {(() => {
-                                  const mgr = users.find((u) => (u._id || u.id) === student.managerId);
-                                  return mgr?.name || mgr?.username || <span className="text-violet-300 text-xs">—</span>;
-                                })()}
-                              </div>
-                            )}
-                          </td>
-                        )}
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          {isAdmin && editingCampaign === (student.id || student._id) ? (
-                            <select
-                              value={student.campaign || ""}
-                              onChange={(e) => handleCampaignChange(student.id || student._id, e.target.value)}
-                              onBlur={() => setEditingCampaign(null)}
-                              onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el?.click(), 0); }}
-                              autoFocus
-                              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-violet-300 bg-white focus:outline-none focus:ring-2 focus:ring-violet-200"
-                            >
-                              <option value="">— Trống —</option>
-                              {campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                          ) : (
-                            <div
-                              onClick={() => isAdmin && setEditingCampaign(student.id || student._id)}
-                              className={`rounded-xl border border-transparent px-2 py-1 transition ${isAdmin ? "cursor-pointer hover:border-violet-200 hover:bg-violet-50" : ""}`}
-                            >
-                              {student.campaign ? (
-                                <span className="rounded-full bg-violet-100 text-violet-700 border border-violet-200 px-2.5 py-0.5 text-xs font-semibold">
-                                  {student.campaign}
-                                </span>
-                              ) : (
-                                <span className={`text-xs ${isAdmin ? "text-violet-300" : "text-slate-300"}`}>—</span>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap relative">
-                          {editingProcessing?.id === (student.id || student._id) ? (
-                            <div className="absolute z-30 top-1 left-1 bg-white border border-indigo-200 rounded-xl shadow-lg p-3 flex flex-col gap-2 min-w-[160px]"
-                              onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="date"
-                                value={editingProcessing.date}
-                                onChange={(e) => setEditingProcessing((p) => ({ ...p, date: e.target.value }))}
-                                className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200"
-                              />
-                              <div className="flex gap-1">
-                                {[{ v: "S", label: "Sáng", cls: "bg-amber-100 text-amber-600 border-amber-200" },
-                                  { v: "C", label: "Chiều", cls: "bg-blue-100 text-blue-600 border-blue-200" },
-                                  { v: "T", label: "Tối", cls: "bg-indigo-100 text-indigo-600 border-indigo-200" }]
-                                  .map(({ v, label, cls }) => (
-                                    <button key={v} type="button"
-                                      onClick={() => setEditingProcessing((p) => ({ ...p, shift: p.shift === v ? null : v }))}
-                                      className={`flex-1 rounded-lg border px-1 py-1 text-[11px] font-bold transition ${
-                                        editingProcessing.shift === v ? cls : "bg-slate-50 text-slate-400 border-slate-200"
-                                      }`}>
-                                      {label}
-                                    </button>
-                                  ))}
-                              </div>
-                              <div className="flex gap-1.5 mt-0.5">
-                                <button type="button" onClick={() => setEditingProcessing(null)}
-                                  className="flex-1 rounded-lg border border-slate-200 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-50">
-                                  Huỷ
-                                </button>
-                                <button type="button" onClick={handleProcessingSave}
-                                  className="flex-1 rounded-lg bg-indigo-600 py-1 text-[11px] font-bold text-white hover:bg-indigo-700">
-                                  Lưu
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button type="button"
-                              onClick={() => setEditingProcessing({
-                                id: student.id || student._id,
-                                date: student.processingDate ? new Date(student.processingDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-                                shift: student.processingShift || null,
-                              })}
-                              className="w-full text-left rounded-xl border border-transparent px-2 py-1.5 hover:border-slate-300 hover:bg-slate-50 transition">
-                              {student.processingDate ? (
-                                <span className="flex flex-col gap-0.5">
-                                  <span className="text-slate-700 text-xs font-semibold">
-                                    {fmtDate(student.processingDate)}
-                                  </span>
-                                  {student.processingShift && (
-                                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded w-fit ${
-                                      student.processingShift === "S" ? "bg-amber-100 text-amber-600" :
-                                      student.processingShift === "C" ? "bg-blue-100 text-blue-600" :
-                                      "bg-indigo-100 text-indigo-600"
-                                    }`}>
-                                      {{ S: "Sáng", C: "Chiều", T: "Tối" }[student.processingShift]}
-                                    </span>
-                                  )}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300 text-xs">—</span>
-                              )}
-                            </button>
-                          )}
+                        <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                          {consultantName}
                         </td>
                         <td className="px-4 py-4">
                           {renderStepCell(student, "warm")}
@@ -1272,19 +939,43 @@ export default function Students() {
                         <td className="px-4 py-4">
                           {renderStepCell(student, "call3")}
                         </td>
-                        <td className="px-4 py-4 text-center">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <button
                             type="button"
-                            onClick={() => setScheduleModal({
-                              open: true,
-                              studentId: student.id || student._id,
-                              date: new Date().toISOString().slice(0, 10),
-                              time: "",
-                              consultantId: student.consultant?._id || student.consultant?.id || (typeof student.consultant === "string" ? student.consultant : "") || "",
-                            })}
-                            className="rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition"
+                            onClick={() => {
+                              const sid = student.id || student._id;
+                              const raw = student.scheduledAt;
+                              const d = raw ? new Date(raw) : null;
+                              const date = d
+                                ? d.toISOString().slice(0, 10)
+                                : "";
+                              const time = d
+                                ? d.toISOString().slice(11, 16)
+                                : "";
+                              setScheduleModal({
+                                open: true,
+                                studentId: sid,
+                                date,
+                                time,
+                                consultantId:
+                                  student.consultant?._id ||
+                                  student.consultant?.id ||
+                                  student.consultant ||
+                                  "",
+                              });
+                            }}
+                            className="w-full text-left rounded-2xl border border-transparent px-2 py-1.5 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition"
                           >
-                            + Đặt lịch
+                            {student.scheduledAt ? (
+                              new Date(student.scheduledAt).toLocaleString(
+                                "vi-VN",
+                                { dateStyle: "short", timeStyle: "short" },
+                              )
+                            ) : (
+                              <span className="text-slate-400 text-xs">
+                                Chưa đặt
+                              </span>
+                            )}
                           </button>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
@@ -1292,7 +983,10 @@ export default function Students() {
                             <select
                               value={student.status || "active"}
                               onChange={(e) =>
-                                handleStatusChange(student.id || student._id, e.target.value)
+                                handleStatusChange(
+                                  student.id || student._id,
+                                  e.target.value,
+                                )
                               }
                               onBlur={() => setEditingStatus(null)}
                               onFocus={(e) => {
@@ -1302,13 +996,19 @@ export default function Students() {
                               autoFocus
                               className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
                             >
-                              {Object.entries(statusConfig).map(([key, cfg]) => (
-                                <option key={key} value={key}>{cfg.label}</option>
-                              ))}
+                              {Object.entries(statusConfig).map(
+                                ([key, cfg]) => (
+                                  <option key={key} value={key}>
+                                    {cfg.label}
+                                  </option>
+                                ),
+                              )}
                             </select>
                           ) : (
                             <span
-                              onClick={() => setEditingStatus(student.id || student._id)}
+                              onClick={() =>
+                                setEditingStatus(student.id || student._id)
+                              }
                               className={`text-xs font-semibold px-2.5 py-1 rounded-lg border cursor-pointer hover:opacity-80 transition ${status.className}`}
                             >
                               {status.label}
@@ -1339,14 +1039,6 @@ export default function Students() {
             </table>
           </div>
         </div>
-
-        <Pagination
-          page={page}
-          totalPages={totalPages}
-          total={pagination.total || 0}
-          limit={limit}
-          onPageChange={setPage}
-        />
       </div>
 
       {error && (
@@ -1379,64 +1071,150 @@ export default function Students() {
       {scheduleModal.open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={!scheduleModal.saving ? closeScheduleModal : undefined}
+          onClick={() =>
+            setScheduleModal({
+              open: false,
+              studentId: null,
+              date: "",
+              time: "",
+              consultantId: "",
+            })
+          }
         >
           <div
             className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-base font-bold text-slate-900 mb-5">Đặt lịch hẹn</h2>
+            <h2 className="text-base font-bold text-slate-900 mb-5">
+              Đặt lịch hẹn
+            </h2>
+            <div className="space-y-4">
+              <label className="block space-y-2 text-sm text-slate-700">
+                Ngày hẹn
+                <input
+                  type="date"
+                  value={scheduleModal.date}
+                  onChange={(e) =>
+                    setScheduleModal((prev) => ({
+                      ...prev,
+                      date: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+              </label>
+              <label className="block space-y-2 text-sm text-slate-700">
+                Giờ hẹn
+                <input
+                  type="time"
+                  value={scheduleModal.time}
+                  onChange={(e) =>
+                    setScheduleModal((prev) => ({
+                      ...prev,
+                      time: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+              </label>
+              <label className="block space-y-2 text-sm text-slate-700">
+                Tư vấn viên
+                <select
+                  value={scheduleModal.consultantId}
+                  onChange={(e) =>
+                    setScheduleModal((prev) => ({
+                      ...prev,
+                      consultantId: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
+                >
+                  <option value="">-- Chọn tư vấn viên --</option>
+                  {users.map((u) => (
+                    <option key={u._id || u.id} value={u._id || u.id}>
+                      {u.name || u.username || u.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={handleScheduleSave}
+                className="flex-1 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+              >
+                Lưu
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setScheduleModal({
+                    open: false,
+                    studentId: null,
+                    date: "",
+                    time: "",
+                    consultantId: "",
+                  })
+                }
+                className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-            {scheduleModal.saving ? (
-              <div className="flex flex-col items-center gap-4 py-8">
-                <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                <p className="text-sm font-semibold text-slate-600">Đang đặt lịch hẹn...</p>
-              </div>
-            ) : scheduleModal.result === "success" ? (
-              <div className="flex flex-col items-center gap-4 py-6">
-                <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center text-2xl">✓</div>
-                <p className="text-base font-bold text-emerald-600">{scheduleModal.resultMessage}</p>
-                <button onClick={closeScheduleModal}
-                  className="w-full rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition">
-                  Đóng
+      {showImportPanel && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => {
+            setShowImportPanel(false);
+            setImportMessage("");
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-bold text-slate-900 mb-5">
+              Import học viên từ Excel
+            </h2>
+            <form onSubmit={handleImportSubmit} className="space-y-4">
+              <label className="block space-y-2 text-sm text-slate-700">
+                Chọn file Excel
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+                />
+              </label>
+              {importMessage && (
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  {importMessage}
+                </div>
+              )}
+              <div className="flex gap-3 mt-2">
+                <button
+                  type="submit"
+                  className="flex-1 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  Nhập file
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImportPanel(false);
+                    setImportMessage("");
+                  }}
+                  className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Hủy
                 </button>
               </div>
-            ) : scheduleModal.result === "error" ? (
-              <div className="flex flex-col items-center gap-4 py-6">
-                <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center text-2xl">✕</div>
-                <p className="text-base font-bold text-red-500">{scheduleModal.resultMessage}</p>
-                <div className="flex gap-3 w-full">
-                  <button onClick={() => setScheduleModal((p) => ({ ...p, result: null }))}
-                    className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
-                    Thử lại
-                  </button>
-                  <button onClick={closeScheduleModal}
-                    className="flex-1 rounded-2xl bg-red-500 py-3 text-sm font-bold text-white hover:bg-red-600 transition">
-                    Đóng
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <ScheduleForm
-                date={scheduleModal.date}
-                hour={scheduleModal.time ? scheduleModal.time.split(":")[0] : ""}
-                minute={scheduleModal.time ? scheduleModal.time.split(":")[1] || "00" : "00"}
-                consultantId={scheduleModal.consultantId}
-                users={users}
-                onDateChange={(v) => setScheduleModal((p) => ({ ...p, date: v }))}
-                onHourChange={(h) => {
-                  const m = scheduleModal.time?.split(":")[1] || "00";
-                  setScheduleModal((p) => ({ ...p, time: h ? `${h}:${m}` : "" }));
-                }}
-                onMinuteChange={(m) => {
-                  const h = scheduleModal.time?.split(":")[0] || "00";
-                  setScheduleModal((p) => ({ ...p, time: `${h}:${m}` }));
-                }}
-                onConsultantChange={(v) => setScheduleModal((p) => ({ ...p, consultantId: v }))}
-                onSave={handleScheduleSave}
-                onCancel={closeScheduleModal}
-              />
-            )}
+            </form>
           </div>
         </div>
       )}

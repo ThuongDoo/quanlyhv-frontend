@@ -8,12 +8,10 @@ function getWeekOfMonth(date) {
   return Math.ceil((d.getDate() + startOfMonth.getDay()) / 7);
 }
 
-function NumberInput({ label, value, onChange, highlight }) {
+function NumberInput({ label, value, onChange, inputCls = "bg-white border-slate-200" }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className={`text-[11px] font-bold uppercase tracking-widest ${highlight || "text-slate-500"}`}>
-        {label}
-      </label>
+      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</label>
       <input
         type="number"
         min={0}
@@ -21,7 +19,7 @@ function NumberInput({ label, value, onChange, highlight }) {
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         onFocus={(e) => e.target.select()}
-        className={`w-full rounded-xl border px-4 py-3 text-center text-lg font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${highlight ? "bg-amber-50 border-amber-200" : "bg-white border-slate-200"}`}
+        className={`w-full rounded-xl border px-3 py-2.5 text-center text-base font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${inputCls}`}
       />
     </div>
   );
@@ -30,13 +28,11 @@ function NumberInput({ label, value, onChange, highlight }) {
 function DiemDanhSelect({ value, onChange }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
-        Điểm danh
-      </label>
+      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Điểm danh</label>
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-lg font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition"
+        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-center text-base font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition"
       >
         <option value={0}>0</option>
         <option value={0.25}>0.25</option>
@@ -100,21 +96,21 @@ export default function ShiftPerformance() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
+    <div className="h-full flex flex-col bg-slate-100 font-sans">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-10 shadow-sm">
+      <div className="bg-white border-b border-slate-200 px-6 py-3 shadow-sm">
         <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">
           Cập nhật Số liệu Ca làm việc
         </h1>
       </div>
 
-      <div className="max-w-2xl mx-auto px-6 py-8">
-        <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col gap-6">
+      <div className="flex-1 min-h-0 flex items-center justify-center p-6">
+        <form onSubmit={handleSubmit} className="w-full max-w-4xl bg-white rounded-3xl shadow-lg border border-slate-200 overflow-hidden flex flex-col">
 
           {/* Thông tin ca */}
-          <div className="grid grid-cols-4 gap-4 p-4 rounded-2xl border border-slate-100 bg-slate-50">
+          <div className="bg-slate-50 border-b border-slate-200 px-8 py-5 grid grid-cols-4 gap-6">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
                 Ngày <span className="text-red-400">*</span>
               </label>
               <input
@@ -122,27 +118,27 @@ export default function ShiftPerformance() {
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Tháng</label>
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 text-center font-semibold">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Tháng</label>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 text-center">
                 {thang || "—"}
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Tuần</label>
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 text-center font-semibold">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Tuần</label>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 text-center">
                 {tuan || "—"}
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Ca làm</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Ca làm</label>
               <select
                 value={shift}
                 onChange={(e) => setShift(e.target.value)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
               >
                 {SHIFTS.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -151,53 +147,61 @@ export default function ShiftPerformance() {
             </div>
           </div>
 
-          {/* A. Đầu phễu */}
-          <div className="flex flex-col gap-4">
-            <h2 className="text-base font-extrabold text-slate-700">A. ĐẦU PHỄU</h2>
-            <div className="grid grid-cols-3 gap-4">
-              <DiemDanhSelect value={diemDanh} onChange={setDiemDanh} />
-              <NumberInput label="Nhắc máy" value={nhacMay} onChange={setNhacMay} highlight="text-amber-500" />
-              <NumberInput label="Gọi đặt lịch" value={goiDatLich} onChange={setGoiDatLich} highlight="text-blue-500" />
+          {/* A + B + C nằm ngang, phân chia bằng đường dọc */}
+          <div className="flex divide-x divide-slate-100">
+            {/* A. Đầu phễu */}
+            <div className="flex-1 px-8 py-6 flex flex-col gap-4">
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-black text-slate-100 leading-none">A</span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500">Đầu phễu</span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <DiemDanhSelect value={diemDanh} onChange={setDiemDanh} />
+                <NumberInput label="Nhắc máy" value={nhacMay} onChange={setNhacMay} inputCls="bg-amber-50 border-amber-200" />
+                <NumberInput label="Gọi đặt lịch" value={goiDatLich} onChange={setGoiDatLich} inputCls="bg-sky-50 border-sky-200" />
+              </div>
+            </div>
+
+            {/* B. Chuyển đổi */}
+            <div className="flex-1 px-8 py-6 flex flex-col gap-4 bg-blue-50/30">
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-black text-blue-100 leading-none">B</span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-blue-500">Chuyển đổi</span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <NumberInput label="Lịch mới" value={lichMoi} onChange={setLichMoi} inputCls="bg-blue-50 border-blue-200" />
+                <NumberInput label="HV đến (thực tế)" value={hvDen} onChange={setHvDen} inputCls="bg-teal-50 border-teal-200" />
+              </div>
+            </div>
+
+            {/* C. Tài chính */}
+            <div className="flex-1 px-8 py-6 flex flex-col gap-4 bg-red-50/20">
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-black text-red-100 leading-none">C</span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-red-400">Tài chính (VNĐ)</span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <NumberInput label="Doanh số" value={doanhSo} onChange={setDoanhSo} inputCls="bg-white border-slate-200" />
+                <NumberInput label="Doanh thu" value={doanhThu} onChange={setDoanhThu} inputCls="bg-red-50 border-red-200" />
+              </div>
             </div>
           </div>
 
-          <div className="border-t border-slate-100" />
-
-          {/* B. Chuyển đổi */}
-          <div className="flex flex-col gap-4">
-            <h2 className="text-base font-extrabold text-blue-600">B. CHUYỂN ĐỔI</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <NumberInput label="Lịch mới" value={lichMoi} onChange={setLichMoi} highlight="text-blue-400" />
-              <NumberInput label="HV đến (thực tế)" value={hvDen} onChange={setHvDen} highlight="text-teal-500" />
-            </div>
+          {/* Footer */}
+          <div className="border-t border-slate-100 px-8 py-4 flex flex-col gap-3">
+            {message?.type === "error" && (
+              <div className="rounded-xl px-4 py-2.5 text-sm font-medium bg-red-50 text-red-700 border border-red-200">
+                {message.text}
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-2xl bg-emerald-600 py-3 text-sm font-extrabold uppercase tracking-widest text-white transition hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {loading ? "Đang lưu..." : "Lưu số liệu ca làm"}
+            </button>
           </div>
-
-          <div className="border-t border-slate-100" />
-
-          {/* C. Tài chính */}
-          <div className="flex flex-col gap-4">
-            <h2 className="text-base font-extrabold text-red-500">C. TÀI CHÍNH (VNĐ)</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <NumberInput label="Doanh số" value={doanhSo} onChange={setDoanhSo} />
-              <NumberInput label="Doanh thu" value={doanhThu} onChange={setDoanhThu} highlight="text-red-400" />
-            </div>
-          </div>
-
-          {/* Lỗi inline */}
-          {message?.type === "error" && (
-            <div className="rounded-2xl px-4 py-3 text-sm font-medium bg-red-50 text-red-700 border border-red-200">
-              {message.text}
-            </div>
-          )}
-
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-2xl bg-emerald-600 py-4 text-base font-extrabold uppercase tracking-widest text-white transition hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {loading ? "Đang lưu..." : "Lưu số liệu ca làm"}
-          </button>
         </form>
       </div>
 
