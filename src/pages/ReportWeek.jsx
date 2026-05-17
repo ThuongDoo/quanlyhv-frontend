@@ -5,6 +5,7 @@ import {
   PerformanceTable,
 } from "../components/PerformanceReport";
 import { getTodayString } from "../constants/shifts";
+import { fmtDate } from "../utils/dateHelpers";
 
 export default function ReportWeek() {
   const [date] = useState(getTodayString);
@@ -20,7 +21,7 @@ export default function ReportWeek() {
       .finally(() => setLoading(false));
   }, [date]);
 
-  const weekRange = data ? `${data.weekStart} → ${data.weekEnd}` : "—";
+  const weekRange = data ? `${fmtDate(data.weekStart)} → ${fmtDate(data.weekEnd)}` : "—";
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -45,7 +46,7 @@ export default function ReportWeek() {
             <PerformanceSummary s={data?.total} title="BÁO CÁO TUẦN" />
             <PerformanceTable
               rows={data?.days ?? []}
-              getLabel={(row) => row.date}
+              getLabel={(row) => fmtDate(row.date)}
               tableTitle={`Chi tiết từng ngày — ${weekRange}`}
             />
           </>
