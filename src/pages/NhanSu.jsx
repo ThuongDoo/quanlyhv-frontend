@@ -2,13 +2,9 @@ import { useState, useEffect } from "react";
 import { authApi } from "../services/auth";
 import { useAuth } from "../hooks/useAuth";
 import ImportExcel from "../components/ImportExcel";
+import { fmtDate } from "../utils/dateHelpers";
 
 const ROLE_OPTIONS = ["sale", "consultant", "admin"];
-
-function fmtDate(iso) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("vi-VN");
-}
 
 const EMPTY_FORM = {
   name: "", phone: "", email: "", password: "",

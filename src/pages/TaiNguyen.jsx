@@ -1,11 +1,7 @@
 import { useState, useEffect } from "react";
 import { resourceApi, meetingMinutesApi } from "../services/resource";
 import { useAuth } from "../hooks/useAuth";
-
-function fmtDate(iso) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("vi-VN");
-}
+import { fmtDate } from "../utils/dateHelpers";
 
 function monthBadge(iso) {
   if (!iso) return null;

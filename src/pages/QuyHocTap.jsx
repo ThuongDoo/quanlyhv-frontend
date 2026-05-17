@@ -2,16 +2,14 @@ import { useState, useEffect } from "react";
 import { penaltyApi } from "../services/nhanSu";
 import { authApi } from "../services/auth";
 import { useAuth } from "../hooks/useAuth";
+import { fmtDate } from "../utils/dateHelpers";
 
 const TRANG_THAI = {
   chua_nop: { label: "Chưa nộp", cls: "border-amber-200 bg-amber-50 text-amber-600" },
   da_nop:   { label: "Đã nộp",   cls: "border-emerald-200 bg-emerald-50 text-emerald-600" },
 };
 
-function fmtDate(iso) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("vi-VN");
-}
+import { fmtDate } from "../utils/dateHelpers";
 
 function AddPenaltyModal({ users, onClose, onSaved }) {
   const [form, setForm] = useState({ userId: "", date: "", loiPhat: "", tienPhat: 10000, trangThai: "chua_nop" });

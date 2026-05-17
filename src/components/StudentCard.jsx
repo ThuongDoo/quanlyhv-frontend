@@ -1,54 +1,155 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { classificationConfig, statusConfig } from "../constants/studentConfig";
 import { studentApi } from "../services/students";
+import ConfirmModal from "./ConfirmModal";
+import ScheduleForm from "./ScheduleForm";
+import { fmtDate, fmtDateTime } from "../utils/dateHelpers";
 
 function formatScheduledAt(raw) {
-  if (!raw) return null;
-  const d = new Date(raw);
-  return d.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short", hour12: false });
+  return raw ? fmtDateTime(raw) : null;
 }
 
 export default function StudentCard({ student, users = [] }) {
+  // Insight
   const [insightOpen, setInsightOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [editingInsight, setEditingInsight] = useState(false);
+  const [insightDraft, setInsightDraft] = useState("");
   const [copied, setCopied] = useState(false);
   const [localInsight, setLocalInsight] = useState(undefined);
 
+  // Status
+  const [localStatus, setLocalStatus] = useState(undefined);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const statusRef = useRef(null);
+
+  // Schedule
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [schedDate, setSchedDate] = useState("");
+  const [schedHour, setSchedHour] = useState("");
+  const [schedMinute, setSchedMinute] = useState("00");
+  const [schedConsultantId, setSchedConsultantId] = useState("");
+  const [localScheduledAt, setLocalScheduledAt] = useState(undefined);
+
+  // Closing call date
+  const [closingOpen, setClosingOpen] = useState(false);
+  const [closingDate, setClosingDate] = useState("");
+  const [localClosingCallDate, setLocalClosingCallDate] = useState(undefined);
+
+  const [localConsultantId, setLocalConsultantId] = useState(undefined);
+
+  // Confirm modal
+  const [pending, setPending] = useState(null); // { label, description, onConfirm }
+
+  useEffect(() => {
+    if (!statusOpen) return;
+    const h = (e) => { if (!statusRef.current?.contains(e.target)) setStatusOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [statusOpen]);
+
+
   const typeCfg = classificationConfig[student.clasification ?? "0"];
-  const statusCfg = statusConfig[student.status] || Object.values(statusConfig)[0];
+  const currentStatus = localStatus !== undefined ? localStatus : student.status;
+  const statusCfg = statusConfig[currentStatus] || Object.values(statusConfig)[0];
 
   const rawInsight = Array.isArray(student.insights) ? student.insights[0] : student.insights;
   const insight = localInsight !== undefined ? localInsight : rawInsight;
 
+  const scheduledAt = localScheduledAt !== undefined ? localScheduledAt : student.scheduledAt;
+  const scheduledStr = formatScheduledAt(scheduledAt);
+
+  const closingCallDate = localClosingCallDate !== undefined ? localClosingCallDate : student.closingCallDate;
+  const closingStr = closingCallDate ? fmtDate(closingCallDate) : null;
+
   const ownerUser = users.find((u) => (u._id || u.id) === student.ownerUserId);
-  const saleName = ownerUser?.name || ownerUser?.username || "Chưa chia";
+  const saleName = ownerUser?.name || "Chưa chia";
 
-  const consultantId = student.consultant?._id || student.consultant?.id || student.consultant;
-  const consultantUser = users.find((u) => (u._id || u.id) === consultantId);
-  const consultantName = consultantUser?.name || consultantUser?.username || "Chưa có";
+  const resolvedConsultantId = localConsultantId !== undefined ? localConsultantId
+    : student.consultant?._id || student.consultant?.id || (typeof student.consultant === "string" ? student.consultant : null);
+  const consultantUser = users.find((u) => (u._id || u.id) === resolvedConsultantId);
+  const consultantName = consultantUser?.name || "Chưa có";
 
-  const scheduledStr = formatScheduledAt(student.scheduledAt);
+  const confirm = (label, description, onConfirm) => setPending({ label, description, onConfirm });
 
-  const openEdit = () => {
-    setDraft(insight || "");
-    setEditing(true);
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const applyStatusChange = (newStatus) => {
+    setStatusOpen(false);
+    const label = statusConfig[newStatus]?.label;
+    confirm(
+      "Đổi trạng thái",
+      `Chuyển sang "${label}"?`,
+      async () => {
+        setLocalStatus(newStatus);
+        try { await studentApi.updateStudent(student._id || student.id, { status: newStatus }); }
+        catch { setLocalStatus(student.status); }
+      }
+    );
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    const newInsight = draft.trim();
-    setLocalInsight(newInsight || null);
-    setEditing(false);
-    setInsightOpen(false);
-    try {
-      await studentApi.updateStudent(student._id || student.id, { insights: newInsight ? [newInsight] : [] });
-    } catch {
-      setLocalInsight(rawInsight);
-    } finally {
-      setSaving(false);
-    }
+  const openSchedule = () => {
+    const raw = scheduledAt ? new Date(scheduledAt) : null;
+    setSchedDate(raw ? raw.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+    setSchedHour(raw ? String(raw.getHours()).padStart(2, "0") : "");
+    setSchedMinute(raw ? String(Math.round(raw.getMinutes() / 15) * 15).padStart(2, "0") : "00");
+    setSchedConsultantId(resolvedConsultantId || "");
+    setScheduleOpen(true);
+  };
+
+  const applySchedule = () => {
+    const newScheduledAt = schedDate ? `${schedDate}T${schedHour || "00"}:${schedMinute}` : null;
+    const display = newScheduledAt ? formatScheduledAt(newScheduledAt) : "Xoá lịch hẹn";
+    confirm(
+      "Cập nhật lịch hẹn",
+      `Đặt lịch: ${display}?`,
+      async () => {
+        setLocalScheduledAt(newScheduledAt);
+        setLocalConsultantId(schedConsultantId || null);
+        setScheduleOpen(false);
+        try { await studentApi.scheduleStudent(student._id || student.id, { consultantId: schedConsultantId, scheduledAt: newScheduledAt }); }
+        catch { setLocalScheduledAt(scheduledAt); setLocalConsultantId(resolvedConsultantId); }
+      }
+    );
+    setScheduleOpen(false);
+  };
+
+  const openClosing = () => {
+    setClosingDate(closingCallDate
+      ? new Date(closingCallDate).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10)
+    );
+    setClosingOpen(true);
+  };
+
+  const applyClosingDate = () => {
+    const val = closingDate || null;
+    const display = val ? fmtDate(val) : "Xoá ngày liên hệ";
+    confirm(
+      "Cập nhật ngày liên hệ",
+      `Đặt ngày liên hệ: ${display}?`,
+      async () => {
+        setLocalClosingCallDate(val);
+        setClosingOpen(false);
+        try { await studentApi.updateStudent(student._id || student.id, { closingCallDate: val }); }
+        catch { setLocalClosingCallDate(student.closingCallDate); }
+      }
+    );
+    setClosingOpen(false);
+  };
+
+  const applyInsight = async () => {
+    const val = insightDraft.trim() || null;
+    confirm(
+      "Lưu ghi chú",
+      val ? `"${val.slice(0, 60)}${val.length > 60 ? "..." : ""}"` : "Xoá ghi chú?",
+      async () => {
+        setLocalInsight(val);
+        setEditingInsight(false);
+        setInsightOpen(false);
+        try { await studentApi.updateStudent(student._id || student.id, { insights: val ? [val] : [] }); }
+        catch { setLocalInsight(rawInsight); }
+      }
+    );
   };
 
   const handleCopy = () => {
@@ -75,7 +176,25 @@ export default function StudentCard({ student, users = [] }) {
               </a>
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
-              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${statusCfg.className}`}>{statusCfg.label}</span>
+              {/* Status dropdown */}
+              <div className="relative" ref={statusRef}>
+                <button
+                  onClick={() => setStatusOpen((v) => !v)}
+                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border cursor-pointer hover:opacity-80 transition ${statusCfg.className}`}
+                >
+                  {statusCfg.label} ▾
+                </button>
+                {statusOpen && (
+                  <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden min-w-[120px]">
+                    {Object.entries(statusConfig).map(([key, cfg]) => (
+                      <button key={key} onClick={() => applyStatusChange(key)}
+                        className={`w-full text-left px-3 py-2 text-[11px] font-bold transition hover:opacity-90 ${cfg.className} ${key === currentStatus ? "opacity-100" : "opacity-60"}`}>
+                        {cfg.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {typeCfg && (
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${typeCfg.className}`}>{typeCfg.label}</span>
               )}
@@ -96,38 +215,67 @@ export default function StudentCard({ student, users = [] }) {
 
           {/* Insight */}
           {insight ? (
-            <button
-              onClick={() => { setInsightOpen(true); setEditing(false); }}
-              className="w-full text-left bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 text-xs text-amber-800 leading-relaxed truncate hover:bg-amber-100 transition"
-            >
+            <button onClick={() => { setInsightOpen(true); setEditingInsight(false); }}
+              className="w-full text-left bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 text-xs text-amber-800 leading-relaxed truncate hover:bg-amber-100 transition">
               💬 {insight}
             </button>
           ) : (
-            <button
-              onClick={openEdit}
-              className="w-full text-left border border-dashed border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-400 hover:border-amber-300 hover:text-amber-500 transition"
-            >
+            <button onClick={() => { setInsightDraft(""); setEditingInsight(true); setInsightOpen(true); }}
+              className="w-full text-left border border-dashed border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-400 hover:border-amber-300 hover:text-amber-500 transition">
               + Thêm ghi chú...
             </button>
           )}
 
-          {/* Footer */}
-          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-            <div className="flex items-center gap-1.5 text-sm">
-              <span>📅</span>
+          {/* Footer — 2 dates */}
+          <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
+            <button onClick={openSchedule}
+              className={`flex flex-col items-start gap-0.5 rounded-xl px-3 py-2 transition hover:opacity-80 ${scheduledStr ? "bg-indigo-50 border border-indigo-200" : "border border-dashed border-slate-200"}`}>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">📅 Lịch hẹn</span>
               {scheduledStr ? (
-                <span className="font-bold text-indigo-600">{scheduledStr}</span>
+                <span className="text-xs font-bold text-indigo-700">{scheduledStr}</span>
               ) : (
-                <span className="text-slate-400 font-medium text-xs">Chưa có lịch hẹn</span>
+                <span className="text-[11px] text-slate-400">Chưa có</span>
               )}
-            </div>
+            </button>
+            <button onClick={openClosing}
+              className={`flex flex-col items-start gap-0.5 rounded-xl px-3 py-2 transition hover:opacity-80 ${closingStr ? "bg-rose-50 border border-rose-200" : "border border-dashed border-slate-200"}`}>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-rose-400">📞 Ngày liên hệ</span>
+              {closingStr ? (
+                <span className="text-xs font-bold text-rose-600">{closingStr}</span>
+              ) : (
+                <span className="text-[11px] text-slate-400">Chưa có</span>
+              )}
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Schedule popup */}
+      {scheduleOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setScheduleOpen(false)}>
+          <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-slate-800 mb-4">Đặt lịch hẹn</h3>
+            <ScheduleForm
+              date={schedDate}
+              hour={schedHour}
+              minute={schedMinute}
+              consultantId={schedConsultantId}
+              users={users}
+              onDateChange={setSchedDate}
+              onHourChange={setSchedHour}
+              onMinuteChange={setSchedMinute}
+              onConsultantChange={setSchedConsultantId}
+              onSave={applySchedule}
+              onCancel={() => setScheduleOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Insight modal */}
       {insightOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setInsightOpen(false); setEditing(false); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => { setInsightOpen(false); setEditingInsight(false); }}>
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -135,48 +283,69 @@ export default function StudentCard({ student, users = [] }) {
                 <p className="text-xs text-slate-400 mt-0.5">{student.phone}</p>
               </div>
               <div className="flex items-center gap-2">
-                {!editing && (
-                  <button onClick={handleCopy} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${copied ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"}`}>
+                {!editingInsight && insight && (
+                  <button onClick={handleCopy}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${copied ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"}`}>
                     {copied ? "Đã copy!" : "Copy"}
                   </button>
                 )}
-                <button onClick={openEdit} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
-                  Sửa
-                </button>
+                {!editingInsight && (
+                  <button onClick={() => { setInsightDraft(insight || ""); setEditingInsight(true); }}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 transition">
+                    Sửa
+                  </button>
+                )}
               </div>
             </div>
 
-            {editing ? (
+            {editingInsight ? (
               <>
-                <textarea
-                  autoFocus
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  rows={5}
+                <textarea autoFocus value={insightDraft} onChange={(e) => setInsightDraft(e.target.value)} rows={5}
                   className="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 outline-none focus:ring-2 focus:ring-amber-200 resize-none"
-                  placeholder="Nhập ghi chú..."
-                />
+                  placeholder="Nhập ghi chú..." />
                 <div className="flex gap-3 mt-4">
-                  <button onClick={() => setEditing(false)} className="flex-1 rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
-                    Huỷ
-                  </button>
-                  <button onClick={handleSave} disabled={saving} className="flex-1 rounded-2xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-50 transition">
-                    {saving ? "Đang lưu..." : "Lưu"}
-                  </button>
+                  <button onClick={() => setEditingInsight(false)}
+                    className="flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">Huỷ</button>
+                  <button onClick={applyInsight}
+                    className="flex-1 rounded-2xl bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600 transition">Lưu</button>
                 </div>
               </>
             ) : (
               <>
-                <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 text-sm text-amber-800 leading-relaxed whitespace-pre-wrap">
-                  {insight}
-                </div>
-                <button onClick={() => { setInsightOpen(false); setEditing(false); }} className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
-                  Đóng
-                </button>
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 text-sm text-amber-800 leading-relaxed whitespace-pre-wrap">{insight}</div>
+                <button onClick={() => { setInsightOpen(false); }}
+                  className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">Đóng</button>
               </>
             )}
           </div>
         </div>
+      )}
+
+      {/* Closing call date popup */}
+      {closingOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setClosingOpen(false)}>
+          <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-slate-800">📞 Ngày liên hệ</h3>
+            <input type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-200" />
+            <div className="flex gap-2">
+              <button onClick={() => setClosingOpen(false)}
+                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition">Huỷ</button>
+              <button onClick={applyClosingDate}
+                className="flex-1 rounded-xl bg-rose-500 py-2.5 text-sm font-bold text-white hover:bg-rose-600 transition">Xác nhận</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm modal */}
+      {pending && (
+        <ConfirmModal
+          title={pending.label}
+          description={pending.description}
+          onConfirm={() => { pending.onConfirm(); setPending(null); }}
+          onCancel={() => setPending(null)}
+        />
       )}
     </>
   );

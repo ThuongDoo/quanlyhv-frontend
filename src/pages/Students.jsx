@@ -9,6 +9,8 @@ import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import FilterDropdown from "../components/FilterDropdown";
 import ImportExcel from "../components/ImportExcel";
+import ScheduleForm from "../components/ScheduleForm";
+import { fmtDate, fmtDateTime } from "../utils/dateHelpers";
 import {
   classificationConfig,
   statusConfig,
@@ -446,7 +448,7 @@ export default function Students() {
       const cId = s.consultant?._id || s.consultant?.id || (typeof s.consultant === "string" ? s.consultant : null);
       const tvvName = users.find((u) => (u._id || u.id) === cId)?.name || s.consultant?.name || "";
       const processingTime = s.processingDate
-        ? `${new Date(s.processingDate).toLocaleDateString("vi-VN")}${s.processingShift ? " - " + SHIFT_MAP[s.processingShift] : ""}`
+        ? `${fmtDate(s.processingDate)}${s.processingShift ? " - " + SHIFT_MAP[s.processingShift] : ""}`
         : "";
 
       return {
@@ -1186,7 +1188,7 @@ export default function Students() {
                               {student.processingDate ? (
                                 <span className="flex flex-col gap-0.5">
                                   <span className="text-slate-700 text-xs font-semibold">
-                                    {new Date(student.processingDate).toLocaleDateString("vi-VN")}
+                                    {fmtDate(student.processingDate)}
                                   </span>
                                   {student.processingShift && (
                                     <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded w-fit ${
@@ -1244,10 +1246,7 @@ export default function Students() {
                             className="w-full text-left rounded-2xl border border-transparent px-2 py-1.5 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition"
                           >
                             {student.scheduledAt ? (
-                              new Date(student.scheduledAt).toLocaleString(
-                                "vi-VN",
-                                { dateStyle: "short", timeStyle: "short", hour12: false },
-                              )
+                              fmtDateTime(student.scheduledAt)
                             ) : (
                               <span className="text-slate-400 text-xs">
                                 Chưa đặt
@@ -1361,105 +1360,26 @@ export default function Students() {
             className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-base font-bold text-slate-900 mb-5">
-              Đặt lịch hẹn
-            </h2>
-            <div className="space-y-4">
-              <label className="block space-y-2 text-sm text-slate-700">
-                Ngày hẹn
-                <input
-                  type="date"
-                  value={scheduleModal.date}
-                  onChange={(e) =>
-                    setScheduleModal((prev) => ({
-                      ...prev,
-                      date: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                />
-              </label>
-              <div className="space-y-2 text-sm text-slate-700">
-                Giờ hẹn
-                <div className="flex items-center gap-2 mt-2">
-                  <select
-                    value={scheduleModal.time ? scheduleModal.time.split(":")[0] : ""}
-                    onChange={(e) => {
-                      const h = e.target.value;
-                      const m = scheduleModal.time ? scheduleModal.time.split(":")[1] || "00" : "00";
-                      setScheduleModal((prev) => ({ ...prev, time: h ? `${h}:${m}` : "" }));
-                    }}
-                    className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
-                  >
-                    <option value="">--</option>
-                    {Array.from({ length: 24 }, (_, i) => (
-                      <option key={i} value={String(i).padStart(2, "0")}>
-                        {String(i).padStart(2, "0")}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="font-bold text-slate-400">:</span>
-                  <select
-                    value={scheduleModal.time ? scheduleModal.time.split(":")[1] || "00" : ""}
-                    onChange={(e) => {
-                      const m = e.target.value;
-                      const h = scheduleModal.time ? scheduleModal.time.split(":")[0] || "00" : "00";
-                      setScheduleModal((prev) => ({ ...prev, time: m ? `${h}:${m}` : "" }));
-                    }}
-                    className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
-                  >
-                    <option value="">--</option>
-                    {["00", "15", "30", "45"].map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <label className="block space-y-2 text-sm text-slate-700">
-                Tư vấn viên
-                <select
-                  value={scheduleModal.consultantId}
-                  onChange={(e) =>
-                    setScheduleModal((prev) => ({
-                      ...prev,
-                      consultantId: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
-                >
-                  <option value="">-- Chọn tư vấn viên --</option>
-                  {users.map((u) => (
-                    <option key={u._id || u.id} value={u._id || u.id}>
-                      {u.name || u.username || u.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={handleScheduleSave}
-                className="flex-1 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
-              >
-                Lưu
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setScheduleModal({
-                    open: false,
-                    studentId: null,
-                    date: "",
-                    time: "",
-                    consultantId: "",
-                  })
-                }
-                className="flex-1 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              >
-                Hủy
-              </button>
-            </div>
+            <h2 className="text-base font-bold text-slate-900 mb-5">Đặt lịch hẹn</h2>
+            <ScheduleForm
+              date={scheduleModal.date}
+              hour={scheduleModal.time ? scheduleModal.time.split(":")[0] : ""}
+              minute={scheduleModal.time ? scheduleModal.time.split(":")[1] || "00" : "00"}
+              consultantId={scheduleModal.consultantId}
+              users={users}
+              onDateChange={(v) => setScheduleModal((p) => ({ ...p, date: v }))}
+              onHourChange={(h) => {
+                const m = scheduleModal.time?.split(":")[1] || "00";
+                setScheduleModal((p) => ({ ...p, time: h ? `${h}:${m}` : "" }));
+              }}
+              onMinuteChange={(m) => {
+                const h = scheduleModal.time?.split(":")[0] || "00";
+                setScheduleModal((p) => ({ ...p, time: `${h}:${m}` }));
+              }}
+              onConsultantChange={(v) => setScheduleModal((p) => ({ ...p, consultantId: v }))}
+              onSave={handleScheduleSave}
+              onCancel={() => setScheduleModal({ open: false, studentId: null, date: "", time: "", consultantId: "" })}
+            />
           </div>
         </div>
       )}

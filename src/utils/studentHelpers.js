@@ -1,4 +1,5 @@
 import { STEP_CONFIG } from "../constants/studentConfig";
+import { fmtDateTime } from "./dateHelpers";
 
 export function getStep(student, key) {
   if (!student?.steps) return null;
@@ -9,17 +10,8 @@ export function getStep(student, key) {
 
 export const formatDate = (value) => {
   if (!value) return "-";
-  try {
-    return new Date(value).toLocaleString("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "-";
-  }
+  try { return fmtDateTime(value); }
+  catch { return "-"; }
 };
 
 export const formatStepSummary = (student, key) => {
