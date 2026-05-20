@@ -10,6 +10,7 @@ import NhanSu from "../pages/NhanSu";
 import QuyHocTap from "../pages/QuyHocTap";
 import TaiNguyen from "../pages/TaiNguyen";
 import Login from "../pages/Login";
+import NotFound from "../pages/NotFound";
 import { RequireAuth } from "../components/RequireAuth";
 
 export const router = createBrowserRouter([
@@ -33,4 +34,5 @@ export const router = createBrowserRouter([
       { path: "/tai-nguyen", element: <TaiNguyen /> },
     ],
   },
+  { path: "*", element: <NotFound /> },
 ]);

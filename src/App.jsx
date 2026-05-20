@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./routes";
 import ServerError from "./pages/ServerError";
+import { ToastProvider } from "./components/ToastContainer";
 
 function App() {
   const [offlineType, setOfflineType] = useState(null); // "network" | "server" | null
@@ -18,11 +19,15 @@ function App() {
     };
   }, []);
 
-  if (offlineType) {
-    return <ServerError type={offlineType} onRetry={() => setOfflineType(null)} />;
-  }
-
-  return <RouterProvider router={router} />;
+  return (
+    <ToastProvider>
+      {offlineType ? (
+        <ServerError type={offlineType} onRetry={() => setOfflineType(null)} />
+      ) : (
+        <RouterProvider router={router} />
+      )}
+    </ToastProvider>
+  );
 }
 
 export default App;
