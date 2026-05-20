@@ -28,7 +28,7 @@ export const formatStepSummary = (student, key) => {
 
   const resultLabel = config.resultOptions?.find(
     (option) => option.value === data.result,
-  )?.label;
+  )?.label ?? (data.result && data.result !== "null" ? data.result : null);
   const noteLabel = data.note ? ` • ${data.note}` : "";
 
   return resultLabel ? `${resultLabel}${noteLabel}` : "-";

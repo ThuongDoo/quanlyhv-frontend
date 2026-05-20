@@ -1,11 +1,13 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDebounce } from "../hooks/useDebounce";
+import { fmtDate, fmtDateTime, toVNDateString } from "../utils/dateHelpers";
 import { studentApi } from "../services/students";
 import { authApi } from "../services/auth";
 import { appointmentApi } from "../services/appointments";
 import { getUser } from "../hooks/useAuth";
 import StepCell from "../components/StepCell";
 import ScheduleForm from "../components/ScheduleForm";
+import ConfirmModal from "../components/ConfirmModal";
 import LoadingOverlay from "../components/LoadingOverlay";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
@@ -42,7 +44,11 @@ export default function Students() {
   const [editingClassification, setEditingClassification] = useState(null);
   const [editingStatus, setEditingStatus] = useState(null);
   const [editingStep, setEditingStep] = useState(null);
+  const [editingProcessing, setEditingProcessing] = useState(null); // { id, date, shift }
+  const [editingScheduledAt, setEditingScheduledAt] = useState(null); // { id, date, hour, minute }
   const [editingNoteId, setEditingNoteId] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteResult, setDeleteResult] = useState(null); // { type: "success"|"error", message }
   const [noteDraft, setNoteDraft] = useState("");
   const [selectedStudents, setSelectedStudents] = useState(new Set());
   const [showAssignPanel, setShowAssignPanel] = useState(false);
@@ -67,7 +73,14 @@ export default function Students() {
     consultantId: "",
   });
   const closeScheduleModal = () =>
-    setScheduleModal({ open: false, studentId: null, date: "", hour: "", minute: "00", consultantId: "" });
+    setScheduleModal({
+      open: false,
+      studentId: null,
+      date: "",
+      hour: "",
+      minute: "00",
+      consultantId: "",
+    });
   const [newStudent, setNewStudent] = useState({
     name: "",
     phone: "",
@@ -113,6 +126,10 @@ export default function Students() {
         value: u._id || u.id,
         label: u.name || u.username || u.email,
       })),
+      scheduledAt: [
+        { value: "has", label: "Có lịch" },
+        { value: "empty", label: "Không có lịch" },
+      ],
       status: Object.entries(statusConfig).map(([value, cfg]) => ({
         value,
         label: cfg.label,
@@ -127,11 +144,23 @@ export default function Students() {
   // Only clasification is filtered client-side (backend doesn't support it).
   // All other filters are sent as query params to the API.
   const filteredStudents = useMemo(() => {
-    if (!filters.clasification?.length) return students;
-    return students.filter((s) =>
-      filters.clasification.includes(s.clasification || "0"),
-    );
-  }, [students, filters.clasification]);
+    let result = students;
+    if (filters.clasification?.length)
+      result = result.filter((s) =>
+        filters.clasification.includes(s.clasification || ""),
+      );
+    if (filters.scheduledAt?.length) {
+      const hasFilter = filters.scheduledAt.includes("has");
+      const emptyFilter = filters.scheduledAt.includes("empty");
+      result = result.filter((s) => {
+        if (hasFilter && emptyFilter) return true;
+        if (hasFilter) return Boolean(s.scheduledAt);
+        if (emptyFilter) return !s.scheduledAt;
+        return true;
+      });
+    }
+    return result;
+  }, [students, filters.clasification, filters.scheduledAt]);
 
   const loadStudents = useCallback(async () => {
     try {
@@ -240,17 +269,18 @@ export default function Students() {
   };
 
   const handleClassificationChange = async (studentId, newClassification) => {
+    const value = newClassification || null;
     setStudents((prevStudents) =>
       prevStudents.map((student) => {
         const id = student.id || student._id;
         if (id !== studentId) return student;
-        return { ...student, clasification: newClassification };
+        return { ...student, clasification: value };
       }),
     );
     setEditingClassification(null);
     try {
       await studentApi.updateStudent(studentId, {
-        clasification: newClassification,
+        clasification: value,
       });
     } catch (err) {
       setError(
@@ -327,6 +357,73 @@ export default function Students() {
     setLastSelectedIdx(null);
   };
 
+  const handleBulkDelete = () => setDeleteConfirm(true);
+
+  const executeBulkDelete = async () => {
+    const ids = Array.from(selectedStudents);
+    const count = ids.length;
+    setDeleteConfirm(false);
+    setStudents((prev) => prev.filter((s) => !ids.includes(s.id || s._id)));
+    setSelectedStudents(new Set());
+    try {
+      await Promise.all(ids.map((id) => studentApi.deleteStudent(id)));
+      setDeleteResult({
+        type: "success",
+        message: `Đã xoá thành công ${count} học viên.`,
+      });
+    } catch (err) {
+      setDeleteResult({
+        type: "error",
+        message: err?.response?.data?.error || "Xoá thất bại.",
+      });
+      setPendingReload(true);
+    }
+  };
+
+  const handleScheduledAtSave = async () => {
+    if (!editingScheduledAt) return;
+    const { id, date, hour, minute } = editingScheduledAt;
+    const scheduledAt = date
+      ? `${date}T${hour || "00"}:${minute || "00"}`
+      : null;
+    setStudents((prev) =>
+      prev.map((s) => ((s.id || s._id) === id ? { ...s, scheduledAt } : s)),
+    );
+    setEditingScheduledAt(null);
+    try {
+      await studentApi.updateStudent(id, { scheduledAt });
+    } catch (err) {
+      setError(err?.response?.data?.error || "Không thể cập nhật ngày hẹn.");
+      setPendingReload(true);
+    }
+  };
+
+  const handleProcessingSave = async () => {
+    if (!editingProcessing) return;
+    const { id, date, shift } = editingProcessing;
+    setStudents((prev) =>
+      prev.map((s) =>
+        (s.id || s._id) === id
+          ? {
+              ...s,
+              processingDate: date || null,
+              processingShift: shift || null,
+            }
+          : s,
+      ),
+    );
+    setEditingProcessing(null);
+    try {
+      await studentApi.updateStudent(id, {
+        processingDate: date || null,
+        processingShift: shift || null,
+      });
+    } catch (err) {
+      setError(err?.response?.data?.error || "Không thể cập nhật ngày xử lý.");
+      setPendingReload(true);
+    }
+  };
+
   const openAssignPanel = async () => {
     setShowAssignPanel(true);
     if (users.length === 0) {
@@ -363,9 +460,15 @@ export default function Students() {
       setAssignUserId("");
       setShowAssignPanel(false);
       loadStudents();
-      setAssignResult({ type: "success", text: `${result.stats?.modified ?? selectedStudents.size} học viên đã được gán thành công.` });
+      setAssignResult({
+        type: "success",
+        text: `${result.stats?.modified ?? selectedStudents.size} học viên đã được gán thành công.`,
+      });
     } catch (err) {
-      setAssignResult({ type: "error", text: err.message || "Không thể gán học viên." });
+      setAssignResult({
+        type: "error",
+        text: err.message || "Không thể gán học viên.",
+      });
     } finally {
       setAssignLoading(false);
     }
@@ -528,7 +631,10 @@ export default function Students() {
       {openFilterCol && (
         <div
           className="fixed inset-0 z-20"
-          onClick={() => { setOpenFilterCol(null); setFilterAnchorRect(null); }}
+          onClick={() => {
+            setOpenFilterCol(null);
+            setFilterAnchorRect(null);
+          }}
         />
       )}
       <FilterDropdown
@@ -546,12 +652,17 @@ export default function Students() {
               Bước hiện tại:
             </span>
             <select
-              value={filters.currentStepKey?.length ? (filters.currentStepKey[0] ?? "__null__") : ""}
+              value={
+                filters.currentStepKey?.length
+                  ? (filters.currentStepKey[0] ?? "__null__")
+                  : ""
+              }
               onChange={(e) => {
                 const val = e.target.value;
                 setFilters((prev) => ({
                   ...prev,
-                  currentStepKey: val === "" ? [] : [val === "__null__" ? null : val],
+                  currentStepKey:
+                    val === "" ? [] : [val === "__null__" ? null : val],
                 }));
                 setPage(1);
               }}
@@ -560,13 +671,18 @@ export default function Students() {
               <option value="">Tất cả</option>
               <option value="__null__">Chưa xử lý</option>
               {Object.entries(STEP_CONFIG).map(([v, c]) => (
-                <option key={v} value={v}>{c.label}</option>
+                <option key={v} value={v}>
+                  {c.label}
+                </option>
               ))}
             </select>
             {activeFilterCount > 0 && (
               <button
                 type="button"
-                onClick={() => { setFilters({}); setPage(1); }}
+                onClick={() => {
+                  setFilters({});
+                  setPage(1);
+                }}
                 className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-500 hover:bg-red-100 transition"
               >
                 Xóa tất cả ({activeFilterCount})
@@ -686,6 +802,16 @@ export default function Students() {
           </div>
         )}
 
+        {(editingProcessing || editingScheduledAt) && (
+          <div
+            className="fixed inset-0 z-20"
+            onClick={() => {
+              setEditingProcessing(null);
+              setEditingScheduledAt(null);
+            }}
+          />
+        )}
+
         <div className="flex-1 min-h-0 flex flex-col rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           {selectedStudents.size > 0 && (
             <div className="flex items-center justify-between px-6 py-3 bg-indigo-50 border-b border-indigo-200">
@@ -699,7 +825,16 @@ export default function Students() {
                     onClick={openAssignPanel}
                     className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
                   >
-                    Gán cho người dùng
+                    Chia data
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    className="rounded-2xl bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600"
+                  >
+                    Xoá {selectedStudents.size} học viên
                   </button>
                 )}
                 <button
@@ -756,7 +891,9 @@ export default function Students() {
                             setFilterAnchorRect(null);
                           } else {
                             setOpenFilterCol(col);
-                            setFilterAnchorRect(e.currentTarget.getBoundingClientRect());
+                            setFilterAnchorRect(
+                              e.currentTarget.getBoundingClientRect(),
+                            );
                           }
                         }}
                         className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
@@ -772,6 +909,9 @@ export default function Students() {
                     </th>
                   ))}
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
+                    Ngày xử lý
+                  </th>
+                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Làm Ấm
                   </th>
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
@@ -783,8 +923,33 @@ export default function Students() {
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
                     Liên hệ Lần 3
                   </th>
+                  <th className="w-28 px-4 py-3 text-left font-semibold text-slate-600">
+                    Đặt lịch
+                  </th>
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
-                    Lịch hẹn
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        if (openFilterCol === "scheduledAt") {
+                          setOpenFilterCol(null);
+                          setFilterAnchorRect(null);
+                        } else {
+                          setOpenFilterCol("scheduledAt");
+                          setFilterAnchorRect(
+                            e.currentTarget.getBoundingClientRect(),
+                          );
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters.scheduledAt?.length ? "text-indigo-600" : ""}`}
+                    >
+                      Ngày hẹn
+                      {filters.scheduledAt?.length > 0 && (
+                        <span className="bg-indigo-600 text-white text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
+                          {filters.scheduledAt.length}
+                        </span>
+                      )}
+                      <span className="text-xs opacity-50">▾</span>
+                    </button>
                   </th>
                   <th className="w-52 px-4 py-3 text-left font-semibold text-slate-600">
                     Note Vấn đề
@@ -795,7 +960,7 @@ export default function Students() {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={14}
+                      colSpan={16}
                       className="px-4 py-10 text-center text-slate-500"
                     >
                       Đang tải danh sách...
@@ -804,7 +969,7 @@ export default function Students() {
                 ) : filteredStudents.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={14}
+                      colSpan={16}
                       className="px-4 py-10 text-center text-slate-400"
                     >
                       Không tìm thấy học viên.
@@ -813,7 +978,8 @@ export default function Students() {
                 ) : (
                   filteredStudents.map((student, idx) => {
                     const classification =
-                      classificationConfig[student.clasification || "0"];
+                      classificationConfig[student.clasification || ""] ??
+                      classificationConfig[""];
                     const status =
                       statusConfig[student.status] ||
                       Object.values(statusConfig)[0];
@@ -836,18 +1002,27 @@ export default function Students() {
                         key={student.id || student._id || idx}
                         className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}
                       >
-                        <td className={`px-4 py-4 text-center sticky left-0 z-[1] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
+                        <td
+                          className={`px-4 py-4 text-center sticky left-0 z-[1] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}
+                        >
                           <input
                             type="checkbox"
-                            checked={selectedStudents.has(student.id || student._id)}
+                            checked={selectedStudents.has(
+                              student.id || student._id,
+                            )}
                             onChange={(e) => {
                               const sid = student.id || student._id;
-                              if (e.nativeEvent.shiftKey && lastSelectedIdx !== null) {
+                              if (
+                                e.nativeEvent.shiftKey &&
+                                lastSelectedIdx !== null
+                              ) {
                                 const start = Math.min(lastSelectedIdx, idx);
                                 const end = Math.max(lastSelectedIdx, idx);
                                 setSelectedStudents((prev) => {
                                   const next = new Set(prev);
-                                  filteredStudents.slice(start, end + 1).forEach((s) => next.add(s.id || s._id));
+                                  filteredStudents
+                                    .slice(start, end + 1)
+                                    .forEach((s) => next.add(s.id || s._id));
                                   return next;
                                 });
                               } else {
@@ -858,10 +1033,14 @@ export default function Students() {
                             className="rounded border-slate-300 cursor-pointer"
                           />
                         </td>
-                        <td className={`px-4 py-4 text-slate-800 font-medium whitespace-nowrap sticky left-10 z-[1] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
+                        <td
+                          className={`px-4 py-4 text-slate-800 font-medium whitespace-nowrap sticky left-10 z-[1] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}
+                        >
                           {student.name || "-"}
                         </td>
-                        <td className={`px-4 py-4 text-blue-500 whitespace-nowrap sticky left-[200px] z-[1] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
+                        <td
+                          className={`px-4 py-4 text-blue-500 whitespace-nowrap sticky left-[200px] z-[1] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}
+                        >
                           {student.phone || "-"}
                         </td>
                         <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
@@ -874,7 +1053,7 @@ export default function Students() {
                           {editingClassification ===
                           (student.id || student._id) ? (
                             <select
-                              value={student.clasification || "0"}
+                              value={student.clasification || ""}
                               onChange={(e) =>
                                 handleClassificationChange(
                                   student.id || student._id,
@@ -916,6 +1095,132 @@ export default function Students() {
                         <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
                           {consultantName}
                         </td>
+                        <td className="px-4 py-4 whitespace-nowrap relative">
+                          {editingProcessing?.id ===
+                          (student.id || student._id) ? (
+                            <div
+                              className="absolute z-30 top-1 left-1 bg-white border border-indigo-200 rounded-xl shadow-lg p-3 flex flex-col gap-2 min-w-[160px]"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="date"
+                                value={editingProcessing.date}
+                                onChange={(e) =>
+                                  setEditingProcessing((p) => ({
+                                    ...p,
+                                    date: e.target.value,
+                                  }))
+                                }
+                                className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200"
+                              />
+                              <div className="flex gap-1">
+                                {[
+                                  {
+                                    v: "S",
+                                    label: "Sáng",
+                                    cls: "bg-amber-100 text-amber-600 border-amber-200",
+                                  },
+                                  {
+                                    v: "C",
+                                    label: "Chiều",
+                                    cls: "bg-blue-100 text-blue-600 border-blue-200",
+                                  },
+                                  {
+                                    v: "T",
+                                    label: "Tối",
+                                    cls: "bg-indigo-100 text-indigo-600 border-indigo-200",
+                                  },
+                                ].map(({ v, label, cls }) => (
+                                  <button
+                                    key={v}
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingProcessing((p) => ({
+                                        ...p,
+                                        shift: p.shift === v ? null : v,
+                                      }))
+                                    }
+                                    className={`flex-1 rounded-lg border px-1 py-1 text-[11px] font-bold transition ${editingProcessing.shift === v ? cls : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditingProcessing((p) => ({
+                                    ...p,
+                                    date: "",
+                                    shift: null,
+                                  }))
+                                }
+                                className="w-full rounded-lg border border-slate-200 py-1 text-[11px] font-semibold text-slate-400 hover:bg-slate-50"
+                              >
+                                Để trống
+                              </button>
+                              <div className="flex gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingProcessing(null)}
+                                  className="flex-1 rounded-lg border border-slate-200 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-50"
+                                >
+                                  Huỷ
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleProcessingSave}
+                                  className="flex-1 rounded-lg bg-indigo-600 py-1 text-[11px] font-bold text-white hover:bg-indigo-700"
+                                >
+                                  Lưu
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditingProcessing({
+                                  id: student.id || student._id,
+                                  date: student.processingDate
+                                    ? toVNDateString(student.processingDate)
+                                    : toVNDateString(new Date().toISOString()),
+                                  shift: student.processingShift || null,
+                                })
+                              }
+                              className="w-full text-left rounded-xl border border-transparent px-2 py-1.5 hover:border-slate-300 hover:bg-slate-50 transition"
+                            >
+                              {student.processingDate ? (
+                                <span className="flex flex-col gap-0.5">
+                                  <span className="text-xs font-semibold text-slate-700">
+                                    {fmtDate(student.processingDate)}
+                                  </span>
+                                  {student.processingShift && (
+                                    <span
+                                      className={`text-[11px] font-bold px-1.5 py-0.5 rounded w-fit ${
+                                        student.processingShift === "S"
+                                          ? "bg-amber-100 text-amber-600"
+                                          : student.processingShift === "C"
+                                            ? "bg-blue-100 text-blue-600"
+                                            : "bg-indigo-100 text-indigo-600"
+                                      }`}
+                                    >
+                                      {
+                                        { S: "Sáng", C: "Chiều", T: "Tối" }[
+                                          student.processingShift
+                                        ]
+                                      }
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 text-xs">
+                                  —
+                                </span>
+                              )}
+                            </button>
+                          )}
+                        </td>
                         <td className="px-4 py-4">
                           {renderStepCell(student, "warm")}
                         </td>
@@ -947,8 +1252,134 @@ export default function Students() {
                             }
                             className="rounded-xl bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-100 transition"
                           >
-                            Hẹn lịch
+                            + Đặt lịch
                           </button>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap relative">
+                          {editingScheduledAt?.id ===
+                          (student.id || student._id) ? (
+                            <div
+                              className="absolute z-30 top-1 left-1 bg-white border border-indigo-200 rounded-xl shadow-lg p-3 flex flex-col gap-2 min-w-[170px]"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="date"
+                                value={editingScheduledAt.date}
+                                onChange={(e) =>
+                                  setEditingScheduledAt((p) => ({
+                                    ...p,
+                                    date: e.target.value,
+                                  }))
+                                }
+                                className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200"
+                              />
+                              <div className="flex items-center gap-1.5">
+                                <select
+                                  value={editingScheduledAt.hour}
+                                  onChange={(e) =>
+                                    setEditingScheduledAt((p) => ({
+                                      ...p,
+                                      hour: e.target.value,
+                                    }))
+                                  }
+                                  className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200 bg-white"
+                                >
+                                  <option value="">--</option>
+                                  {Array.from({ length: 24 }, (_, i) => (
+                                    <option
+                                      key={i}
+                                      value={String(i).padStart(2, "0")}
+                                    >
+                                      {String(i).padStart(2, "0")}
+                                    </option>
+                                  ))}
+                                </select>
+                                <span className="text-slate-400 font-bold text-xs">
+                                  :
+                                </span>
+                                <select
+                                  value={editingScheduledAt.minute}
+                                  onChange={(e) =>
+                                    setEditingScheduledAt((p) => ({
+                                      ...p,
+                                      minute: e.target.value,
+                                    }))
+                                  }
+                                  className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200 bg-white"
+                                >
+                                  {["00", "15", "30", "45"].map((m) => (
+                                    <option key={m} value={m}>
+                                      {m}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditingScheduledAt((p) => ({
+                                    ...p,
+                                    date: "",
+                                    hour: "",
+                                    minute: "00",
+                                  }))
+                                }
+                                className="w-full rounded-lg border border-slate-200 py-1 text-[11px] font-semibold text-slate-400 hover:bg-slate-50"
+                              >
+                                Để trống
+                              </button>
+                              <div className="flex gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingScheduledAt(null)}
+                                  className="flex-1 rounded-lg border border-slate-200 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-50"
+                                >
+                                  Huỷ
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleScheduledAtSave}
+                                  className="flex-1 rounded-lg bg-indigo-600 py-1 text-[11px] font-bold text-white hover:bg-indigo-700"
+                                >
+                                  Lưu
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const raw = student.scheduledAt
+                                  ? new Date(student.scheduledAt)
+                                  : null;
+                                setEditingScheduledAt({
+                                  id: student.id || student._id,
+                                  date: student.scheduledAt
+                                    ? toVNDateString(student.scheduledAt)
+                                    : "",
+                                  hour: raw
+                                    ? String(raw.getHours()).padStart(2, "0")
+                                    : "",
+                                  minute: raw
+                                    ? String(
+                                        Math.round(raw.getMinutes() / 15) * 15,
+                                      ).padStart(2, "0")
+                                    : "00",
+                                });
+                              }}
+                              className="w-full text-left rounded-xl border border-transparent px-2 py-1.5 hover:border-indigo-200 hover:bg-indigo-50 transition"
+                            >
+                              {student.scheduledAt ? (
+                                <span className="text-xs font-semibold text-indigo-600">
+                                  {fmtDateTime(student.scheduledAt)}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 text-xs">
+                                  —
+                                </span>
+                              )}
+                            </button>
+                          )}
                         </td>
                         <td className="px-4 py-4 text-slate-700">
                           <div
@@ -1008,18 +1439,40 @@ export default function Students() {
           <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl flex flex-col items-center gap-4">
             {assignResult.type === "success" ? (
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-                <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                <svg
+                  className="h-8 w-8 text-emerald-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
               </div>
             ) : (
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-                <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="h-8 w-8 text-red-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </div>
             )}
-            <p className="text-base font-bold text-slate-800 text-center">{assignResult.text}</p>
+            <p className="text-base font-bold text-slate-800 text-center">
+              {assignResult.text}
+            </p>
             <button
               type="button"
               onClick={() => setAssignResult(null)}
@@ -1036,21 +1489,49 @@ export default function Students() {
           <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl flex flex-col items-center gap-4">
             {scheduleResult.type === "success" ? (
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-                <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                <svg
+                  className="h-8 w-8 text-emerald-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
               </div>
             ) : (
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-                <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="h-8 w-8 text-red-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </div>
             )}
-            <p className="text-base font-bold text-slate-800 text-center">{scheduleResult.text}</p>
+            <p className="text-base font-bold text-slate-800 text-center">
+              {scheduleResult.text}
+            </p>
             <button
               type="button"
-              onClick={() => { setScheduleResult(null); if (scheduleResult.type === "error") { setPendingReload(false); loadStudents(); } }}
+              onClick={() => {
+                setScheduleResult(null);
+                if (scheduleResult.type === "error") {
+                  setPendingReload(false);
+                  loadStudents();
+                }
+              }}
               className={`w-full rounded-2xl py-3 text-sm font-bold text-white transition ${scheduleResult.type === "success" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-500 hover:bg-red-600"}`}
             >
               Đóng
@@ -1068,7 +1549,9 @@ export default function Students() {
             className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-base font-bold text-slate-900 mb-5">Đặt lịch hẹn</h2>
+            <h2 className="text-base font-bold text-slate-900 mb-5">
+              Đặt lịch hẹn
+            </h2>
             <ScheduleForm
               date={scheduleModal.date}
               hour={scheduleModal.hour}
@@ -1077,8 +1560,12 @@ export default function Students() {
               users={users}
               onDateChange={(v) => setScheduleModal((p) => ({ ...p, date: v }))}
               onHourChange={(v) => setScheduleModal((p) => ({ ...p, hour: v }))}
-              onMinuteChange={(v) => setScheduleModal((p) => ({ ...p, minute: v }))}
-              onConsultantChange={(v) => setScheduleModal((p) => ({ ...p, consultantId: v }))}
+              onMinuteChange={(v) =>
+                setScheduleModal((p) => ({ ...p, minute: v }))
+              }
+              onConsultantChange={(v) =>
+                setScheduleModal((p) => ({ ...p, consultantId: v }))
+              }
               onSave={handleScheduleSave}
               onCancel={closeScheduleModal}
               saving={false}
@@ -1241,6 +1728,48 @@ export default function Students() {
                 Hủy
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirm && (
+        <ConfirmModal
+          title="Xoá học viên"
+          description={`Bạn chắc chắn muốn xoá ${selectedStudents.size} học viên đã chọn? Hành động này không thể hoàn tác.`}
+          confirmLabel="Xoá"
+          onConfirm={executeBulkDelete}
+          onCancel={() => setDeleteConfirm(false)}
+          danger
+        />
+      )}
+
+      {deleteResult && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40"
+          onClick={() => setDeleteResult(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center gap-3 py-2">
+              <div
+                className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold ${deleteResult.type === "success" ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-500"}`}
+              >
+                {deleteResult.type === "success" ? "✓" : "✕"}
+              </div>
+              <p
+                className={`font-bold text-base text-center ${deleteResult.type === "success" ? "text-emerald-600" : "text-red-500"}`}
+              >
+                {deleteResult.message}
+              </p>
+            </div>
+            <button
+              onClick={() => setDeleteResult(null)}
+              className={`w-full rounded-xl py-2.5 text-sm font-bold text-white transition ${deleteResult.type === "success" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-500 hover:bg-red-600"}`}
+            >
+              Đóng
+            </button>
           </div>
         </div>
       )}

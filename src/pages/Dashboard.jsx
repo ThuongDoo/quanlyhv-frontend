@@ -88,7 +88,7 @@ function AppointmentSection({
     const s = apt.studentId || {};
     const q = search.toLowerCase();
     const matchSearch = !q || s.name?.toLowerCase().includes(q) || s.phone?.includes(search);
-    const matchClass = !selectedClassification || (s.clasification || "0") === selectedClassification;
+    const matchClass = !selectedClassification || (s.clasification || "") === selectedClassification;
     return matchSearch && matchClass;
   });
 

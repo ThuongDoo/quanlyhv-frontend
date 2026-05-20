@@ -50,7 +50,7 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   }, [statusOpen]);
 
 
-  const typeCfg = classificationConfig[student.clasification ?? "0"];
+  const typeCfg = classificationConfig[student.clasification || ""] ?? classificationConfig[""];
   const currentStatus = localStatus !== undefined ? localStatus : student.status;
   const statusCfg = statusConfig[currentStatus] || Object.values(statusConfig)[0];
 
