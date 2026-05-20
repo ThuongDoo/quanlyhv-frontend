@@ -1,14 +1,10 @@
 import { useState, useEffect } from "react";
 import { shiftPerformanceApi } from "../services/shiftPerformance";
 import { PerformanceSummary, PerformanceTable } from "../components/PerformanceReport";
+import { MONTHS } from "../constants/studentConfig";
 import LoadingOverlay from "../components/LoadingOverlay";
 
 const now = new Date();
-
-const MONTHS = Array.from({ length: 12 }, (_, i) => ({
-  value: i + 1,
-  label: `Tháng ${i + 1}`,
-}));
 
 export default function ReportMonth() {
   const [month, setMonth] = useState(now.getMonth() + 1);

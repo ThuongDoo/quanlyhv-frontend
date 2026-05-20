@@ -3,10 +3,8 @@ import { authApi } from "../services/auth";
 import { useAuth } from "../hooks/useAuth";
 import ImportExcel from "../components/ImportExcel";
 import { fmtDate } from "../utils/dateHelpers";
-import { ROLE_LABELS } from "../constants/studentConfig";
+import { ROLE_LABELS, ROLE_OPTIONS } from "../constants/studentConfig";
 import LoadingOverlay from "../components/LoadingOverlay";
-
-const ROLE_OPTIONS = ["sale", "consultant", "admin"];
 
 const EMPTY_FORM = {
   name: "",

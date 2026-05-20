@@ -87,7 +87,7 @@ export default function Students() {
   const [newStudent, setNewStudent] = useState({
     name: "",
     phone: "",
-    year: new Date().getFullYear(),
+    year: 0,
     mobileCarrier: "",
     university: "",
   });
@@ -232,7 +232,8 @@ export default function Students() {
   }, []);
 
   useEffect(() => {
-    studentApi.fetchCampaigns()
+    studentApi
+      .fetchCampaigns()
       .then((data) => setCampaigns(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
@@ -776,14 +777,22 @@ export default function Students() {
               </label>
               <label className="space-y-2 text-sm text-slate-700">
                 Năm
-                <input
-                  type="number"
+                <select
                   value={newStudent.year}
                   onChange={(e) =>
-                    setNewStudent((prev) => ({ ...prev, year: e.target.value }))
+                    setNewStudent((prev) => ({
+                      ...prev,
+                      year: Number(e.target.value),
+                    }))
                   }
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                />
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white"
+                >
+                  <option value={0}>Không xác định</option>
+                  <option value={1}>Năm 1</option>
+                  <option value={2}>Năm 2</option>
+                  <option value={3}>Năm 3</option>
+                  <option value={4}>Năm 4</option>
+                </select>
               </label>
               <label className="space-y-2 text-sm text-slate-700">
                 Nhà mạng
@@ -1057,7 +1066,7 @@ export default function Students() {
                           />
                         </td>
                         <td
-                          className={`px-4 py-4 text-slate-800 font-medium whitespace-nowrap sticky left-10 z-[1] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}
+                          className={`px-4 py-4 text-slate-800 font-medium sticky left-10 z-[1] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}`}
                         >
                           {student.name || "-"}
                         </td>
@@ -1112,13 +1121,13 @@ export default function Students() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-4 text-slate-600 whitespace-nowrap">
+                        <td className="px-4 py-4 text-slate-600">
                           {student.university || "-"}
                         </td>
-                        <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
+                        <td className="px-4 py-4 text-slate-700">
                           {consultantName}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4">
                           {student.campaign ? (
                             <span className="rounded-full bg-violet-100 text-violet-700 border border-violet-200 px-2.5 py-0.5 text-xs font-semibold">
                               {student.campaign}
@@ -1419,7 +1428,7 @@ export default function Students() {
                               setEditingNoteId(student.id || student._id);
                               setNoteDraft(note === "-" ? "" : note);
                             }}
-                            className="cursor-pointer truncate rounded-2xl border border-transparent px-2 py-2 text-sm hover:border-slate-300 hover:bg-slate-50 transition"
+                            className="cursor-pointer rounded-2xl border border-transparent px-2 py-2 text-sm hover:border-slate-300 hover:bg-slate-50 transition break-words"
                             title={note !== "-" ? note : undefined}
                           >
                             {note !== "-" ? (
@@ -1619,13 +1628,29 @@ export default function Students() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-bold text-slate-900">Import học viên từ Excel</h2>
+              <h2 className="text-base font-bold text-slate-900">
+                Import học viên từ Excel
+              </h2>
               <button
                 type="button"
                 onClick={() => {
                   const ws = XLSX.utils.aoa_to_sheet([
-                    ["name", "phone", "year", "university", "mobileCarrier", "campaign"],
-                    ["Nguyễn Văn A", "0987654321", 2005, "UIT", "viettel", "Chiến dịch 2025"],
+                    [
+                      "name",
+                      "phone",
+                      "year",
+                      "university",
+                      "mobileCarrier",
+                      "campaign",
+                    ],
+                    [
+                      "Nguyễn Văn A",
+                      "0987654321",
+                      2005,
+                      "UIT",
+                      "viettel",
+                      "Chiến dịch 2025",
+                    ],
                   ]);
                   const wb = XLSX.utils.book_new();
                   XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
@@ -1675,35 +1700,57 @@ export default function Students() {
       )}
 
       {importResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setImportResult(null)}>
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg flex flex-col gap-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-extrabold text-slate-800 text-base">Kết quả Import</h2>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setImportResult(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg flex flex-col gap-4 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-extrabold text-slate-800 text-base">
+              Kết quả Import
+            </h2>
 
             {(() => {
-              const successList = importResult.successful ?? importResult.success ?? [];
+              const successList =
+                importResult.successful ?? importResult.success ?? [];
               const failedList = importResult.failed ?? [];
-              const allSuccess = successList.length > 0 && failedList.length === 0;
+              const allSuccess =
+                successList.length > 0 && failedList.length === 0;
               return (
                 <>
                   {allSuccess ? (
                     <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3">
                       <span className="text-2xl">✅</span>
                       <div>
-                        <p className="font-bold text-emerald-700 text-sm">Import thành công!</p>
-                        <p className="text-xs text-emerald-600">{importResult.message}</p>
+                        <p className="font-bold text-emerald-700 text-sm">
+                          Import thành công!
+                        </p>
+                        <p className="text-xs text-emerald-600">
+                          {importResult.message}
+                        </p>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-slate-500">{importResult.message}</p>
+                    <p className="text-sm text-slate-500">
+                      {importResult.message}
+                    </p>
                   )}
 
                   {successList.length > 0 && !allSuccess && (
                     <div>
-                      <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2">Thành công ({successList.length})</p>
+                      <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2">
+                        Thành công ({successList.length})
+                      </p>
                       <div className="rounded-xl bg-emerald-50 border border-emerald-200 divide-y divide-emerald-100">
                         {successList.map((r, i) => (
-                          <div key={i} className="px-3 py-2 text-xs text-emerald-700">
-                            Dòng {r.row ?? r.rowNumber} — {r.name ?? r.phone ?? ""}
+                          <div
+                            key={i}
+                            className="px-3 py-2 text-xs text-emerald-700"
+                          >
+                            Dòng {r.row ?? r.rowNumber} —{" "}
+                            {r.name ?? r.phone ?? ""}
                           </div>
                         ))}
                       </div>
@@ -1712,10 +1759,15 @@ export default function Students() {
 
                   {failedList.length > 0 && (
                     <div>
-                      <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-2">Thất bại ({failedList.length})</p>
+                      <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-2">
+                        Thất bại ({failedList.length})
+                      </p>
                       <div className="rounded-xl bg-red-50 border border-red-200 divide-y divide-red-100">
                         {failedList.map((r, i) => (
-                          <div key={i} className="px-3 py-2 text-xs text-red-600">
+                          <div
+                            key={i}
+                            className="px-3 py-2 text-xs text-red-600"
+                          >
                             Dòng {r.row ?? r.rowNumber} — {r.reason}
                           </div>
                         ))}
@@ -1723,8 +1775,10 @@ export default function Students() {
                     </div>
                   )}
 
-                  <button onClick={() => setImportResult(null)}
-                    className={`w-full rounded-xl py-2.5 text-sm font-semibold transition ${allSuccess ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-600"}`}>
+                  <button
+                    onClick={() => setImportResult(null)}
+                    className={`w-full rounded-xl py-2.5 text-sm font-semibold transition ${allSuccess ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-600"}`}
+                  >
                     Đóng
                   </button>
                 </>

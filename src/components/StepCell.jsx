@@ -66,7 +66,7 @@ export default function StepCell({
     <button
       type="button"
       onClick={() => onEditingChange(editingKey)}
-      className="w-full text-left rounded-2xl border border-transparent px-2 py-2 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+      className="w-full text-left rounded-2xl border border-transparent px-2 py-2 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50 break-words"
     >
       {formatStepSummary(student, stepKey)}
     </button>

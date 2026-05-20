@@ -66,6 +66,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    if (!error.response) {
+      const type = navigator.onLine ? "server" : "network";
+      window.dispatchEvent(new CustomEvent("server:offline", { detail: { type } }));
+    }
+
     const status = error?.response?.status;
 
     // 401 → hết phiên, về login

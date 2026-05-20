@@ -121,3 +121,20 @@ export const ROLE_CONFIG = {
 export const ROLE_LABELS = Object.fromEntries(
   Object.entries(ROLE_CONFIG).map(([k, v]) => [k, v.label]),
 );
+
+export const ROLE_OPTIONS = Object.keys(ROLE_CONFIG);
+
+export const APPOINTMENT_STATUS = {
+  ...statusConfig,
+  CANCELLED: { label: "ĐÃ HUỶ", className: "bg-red-100 text-red-700 border-red-200" },
+};
+
+export const TRANG_THAI = {
+  chua_nop: { label: "Chưa nộp", cls: "border-amber-200 bg-amber-50 text-amber-600" },
+  da_nop:   { label: "Đã nộp",   cls: "border-emerald-200 bg-emerald-50 text-emerald-600" },
+};
+
+export const MONTHS = Array.from({ length: 12 }, (_, i) => ({
+  value: i + 1,
+  label: `Tháng ${i + 1}`,
+}));

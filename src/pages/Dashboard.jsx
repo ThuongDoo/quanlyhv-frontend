@@ -7,16 +7,8 @@ import StudentCard from "../components/StudentCard";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import DateInput from "../components/DateInput";
-import { classificationConfig, statusConfig, ROLE_CONFIG } from "../constants/studentConfig";
+import { classificationConfig, ROLE_CONFIG, APPOINTMENT_STATUS } from "../constants/studentConfig";
 import LoadingOverlay from "../components/LoadingOverlay";
-
-const APPOINTMENT_STATUS = {
-  ...statusConfig,
-  CANCELLED: {
-    label: "ĐÃ HUỶ",
-    className: "bg-red-100 text-red-700 border-red-200",
-  },
-};
 
 function toDateInput(date) {
   return date.toISOString().slice(0, 10);
