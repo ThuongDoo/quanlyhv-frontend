@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { useDebounce } from "../hooks/useDebounce";
 import { fmtDate, fmtDateTime, toVNDateString } from "../utils/dateHelpers";
 import { studentApi } from "../services/students";
@@ -41,6 +42,7 @@ export default function Students() {
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importMessage, setImportMessage] = useState("");
+  const [importResult, setImportResult] = useState(null);
   const [editingClassification, setEditingClassification] = useState(null);
   const [editingStatus, setEditingStatus] = useState(null);
   const [editingStep, setEditingStep] = useState(null);
@@ -58,6 +60,7 @@ export default function Students() {
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [universities, setUniversities] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [filters, setFilters] = useState({});
   const [openFilterCol, setOpenFilterCol] = useState(null);
   const [filterAnchorRect, setFilterAnchorRect] = useState(null);
@@ -126,6 +129,10 @@ export default function Students() {
         value: u._id || u.id,
         label: u.name || u.username || u.email,
       })),
+      campaign: [
+        { value: "__empty__", label: "Trống" },
+        ...campaigns.map((c) => ({ value: c, label: c })),
+      ],
       scheduledAt: [
         { value: "has", label: "Có lịch" },
         { value: "empty", label: "Không có lịch" },
@@ -149,6 +156,15 @@ export default function Students() {
       result = result.filter((s) =>
         filters.clasification.includes(s.clasification || ""),
       );
+    if (filters.campaign?.length) {
+      result = result.filter((s) => {
+        const hasEmpty = filters.campaign.includes("__empty__");
+        const vals = filters.campaign.filter((v) => v !== "__empty__");
+        if (hasEmpty && !s.campaign) return true;
+        if (vals.length && vals.includes(s.campaign)) return true;
+        return false;
+      });
+    }
     if (filters.scheduledAt?.length) {
       const hasFilter = filters.scheduledAt.includes("has");
       const emptyFilter = filters.scheduledAt.includes("empty");
@@ -160,7 +176,7 @@ export default function Students() {
       });
     }
     return result;
-  }, [students, filters.clasification, filters.scheduledAt]);
+  }, [students, filters.clasification, filters.campaign, filters.scheduledAt]);
 
   const loadStudents = useCallback(async () => {
     try {
@@ -216,6 +232,12 @@ export default function Students() {
   }, []);
 
   useEffect(() => {
+    studentApi.fetchCampaigns()
+      .then((data) => setCampaigns(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     setPage(1);
   }, [search]);
 
@@ -256,10 +278,10 @@ export default function Students() {
 
     try {
       const response = await studentApi.importStudents(importFile);
-      console.log(response);
-
-      setImportMessage(response.message || "Import hoàn tất.");
       setImportFile(null);
+      setShowImportPanel(false);
+      setImportMessage("");
+      setImportResult(response);
       loadStudents();
     } catch (err) {
       setImportMessage(
@@ -878,6 +900,7 @@ export default function Students() {
                     { col: "clasification", label: "Phân Loại", width: "w-28" },
                     { col: "university", label: "Trường", width: "w-44" },
                     { col: "ownerUserId", label: "Sale Mới", width: "w-32" },
+                    { col: "campaign", label: "Chiến dịch", width: "w-36" },
                   ].map(({ col, label, width }) => (
                     <th
                       key={col}
@@ -960,7 +983,7 @@ export default function Students() {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={16}
+                      colSpan={17}
                       className="px-4 py-10 text-center text-slate-500"
                     >
                       Đang tải danh sách...
@@ -969,7 +992,7 @@ export default function Students() {
                 ) : filteredStudents.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={16}
+                      colSpan={17}
                       className="px-4 py-10 text-center text-slate-400"
                     >
                       Không tìm thấy học viên.
@@ -1094,6 +1117,15 @@ export default function Students() {
                         </td>
                         <td className="px-4 py-4 text-slate-700 whitespace-nowrap">
                           {consultantName}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {student.campaign ? (
+                            <span className="rounded-full bg-violet-100 text-violet-700 border border-violet-200 px-2.5 py-0.5 text-xs font-semibold">
+                              {student.campaign}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 text-xs">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap relative">
                           {editingProcessing?.id ===
@@ -1586,9 +1618,24 @@ export default function Students() {
             className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-base font-bold text-slate-900 mb-5">
-              Import học viên từ Excel
-            </h2>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold text-slate-900">Import học viên từ Excel</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  const ws = XLSX.utils.aoa_to_sheet([
+                    ["name", "phone", "year", "university", "mobileCarrier", "campaign"],
+                    ["Nguyễn Văn A", "0987654321", 2005, "UIT", "viettel", "Chiến dịch 2025"],
+                  ]);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+                  XLSX.writeFile(wb, "mau_import_hoc_vien.xlsx");
+                }}
+                className="rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-500 text-xs font-semibold px-3 py-2 transition"
+              >
+                ⬇ Tải mẫu
+              </button>
+            </div>
             <form onSubmit={handleImportSubmit} className="space-y-4">
               <label className="block space-y-2 text-sm text-slate-700">
                 Chọn file Excel
@@ -1623,6 +1670,66 @@ export default function Students() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {importResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setImportResult(null)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg flex flex-col gap-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-extrabold text-slate-800 text-base">Kết quả Import</h2>
+
+            {(() => {
+              const successList = importResult.successful ?? importResult.success ?? [];
+              const failedList = importResult.failed ?? [];
+              const allSuccess = successList.length > 0 && failedList.length === 0;
+              return (
+                <>
+                  {allSuccess ? (
+                    <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3">
+                      <span className="text-2xl">✅</span>
+                      <div>
+                        <p className="font-bold text-emerald-700 text-sm">Import thành công!</p>
+                        <p className="text-xs text-emerald-600">{importResult.message}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">{importResult.message}</p>
+                  )}
+
+                  {successList.length > 0 && !allSuccess && (
+                    <div>
+                      <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2">Thành công ({successList.length})</p>
+                      <div className="rounded-xl bg-emerald-50 border border-emerald-200 divide-y divide-emerald-100">
+                        {successList.map((r, i) => (
+                          <div key={i} className="px-3 py-2 text-xs text-emerald-700">
+                            Dòng {r.row ?? r.rowNumber} — {r.name ?? r.phone ?? ""}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {failedList.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-2">Thất bại ({failedList.length})</p>
+                      <div className="rounded-xl bg-red-50 border border-red-200 divide-y divide-red-100">
+                        {failedList.map((r, i) => (
+                          <div key={i} className="px-3 py-2 text-xs text-red-600">
+                            Dòng {r.row ?? r.rowNumber} — {r.reason}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button onClick={() => setImportResult(null)}
+                    className={`w-full rounded-xl py-2.5 text-sm font-semibold transition ${allSuccess ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-600"}`}>
+                    Đóng
+                  </button>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

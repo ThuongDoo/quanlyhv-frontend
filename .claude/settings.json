@@ -5,7 +5,10 @@
       "Bash(Select-String -Pattern \"\\(campaign|Campaign\\)\")",
       "Bash(Get-ChildItem -Path \"d:\\\\code\\\\quanlyhocvien\\\\src\" -Directory)",
       "Bash(Select-Object Name)",
-      "Bash(Get-ChildItem -Path \"D:\\\\code\\\\quanlyhocvien\" -Recurse -Include \"app.js\" -ErrorAction SilentlyContinue)"
+      "Bash(Get-ChildItem -Path \"D:\\\\code\\\\quanlyhocvien\" -Recurse -Include \"app.js\" -ErrorAction SilentlyContinue)",
+      "Bash(ls \"C:/Users/PC/Desktop/\" | grep -i mau)",
+      "Read(//c/Users/PC/Desktop/**)",
+      "Bash(node -e ' *)"
     ]
   }
 }
