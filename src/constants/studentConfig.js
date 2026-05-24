@@ -58,21 +58,87 @@ export const MOBILE_CARRIER_OPTIONS = [
   { value: "other", label: "Khác" },
 ];
 
+export const GOI_CHOT_RESULT_OPTIONS = [
+  { value: "OTHER",      label: "-",           className: "bg-slate-100 text-slate-500 border-slate-200" },
+  { value: "NHIET_TINH", label: "Nhiệt tình",  className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { value: "HO_HUNG",    label: "Hờ hững",     className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  { value: "KNM",        label: "Không nghe máy", className: "bg-orange-100 text-orange-700 border-orange-200" },
+  { value: "TU_CHOI",    label: "Từ chối",     className: "bg-red-100 text-red-700 border-red-200" },
+  { value: "DOI_LICH",   label: "Đổi lịch",   className: "bg-blue-100 text-blue-700 border-blue-200" },
+  { value: "SAI_SO",     label: "Sai số",      className: "bg-slate-100 text-slate-500 border-slate-200" },
+];
+
 const CALL_RESULT_OPTIONS = [
-  { value: "null", label: "-" },
-  { value: "KNM", label: "Không nghe máy" },
-  { value: "KNM1", label: "KNM lần 1" },
-  { value: "KNM2", label: "KNM lần 2" },
-  { value: "KNM3", label: "KNM lần 3" },
-  { value: "GLS", label: "Gọi lại sau" },
-  { value: "TU_CHOI", label: "Từ chối" },
-  { value: "DONG_Y", label: "Đồng ý" },
-  { value: "DAP_MAY", label: "Đặt máy" },
-  { value: "TREO_MAY", label: "Treo máy" },
-  { value: "THUE_BAO", label: "Thuê bao" },
-  { value: "TIEU_CUC", label: "Tiêu cực" },
-  { value: "PHU_HUYNH", label: "Phụ huynh" },
-  { value: "SAI_SO", label: "Sai số" },
+  {
+    value: "null",
+    label: "-",
+    className: "bg-slate-100 text-slate-500 border-slate-200",
+  },
+  {
+    value: "KNM",
+    label: "Không nghe máy",
+    className: "bg-orange-100 text-orange-700 border-orange-200",
+  },
+  {
+    value: "KNM1",
+    label: "KNM lần 1",
+    className: "bg-orange-100 text-orange-700 border-orange-200",
+  },
+  {
+    value: "KNM2",
+    label: "KNM lần 2",
+    className: "bg-orange-100 text-orange-700 border-orange-200",
+  },
+  {
+    value: "KNM3",
+    label: "KNM lần 3",
+    className: "bg-orange-100 text-orange-700 border-orange-200",
+  },
+  {
+    value: "GLS",
+    label: "Gọi lại sau",
+    className: "bg-blue-100 text-blue-700 border-blue-200",
+  },
+  {
+    value: "TU_CHOI",
+    label: "Từ chối",
+    className: "bg-red-100 text-red-700 border-red-200",
+  },
+  {
+    value: "DONG_Y",
+    label: "Đồng ý",
+    className: "bg-yellow-500 text-black border-yellow-200",
+  },
+  {
+    value: "DAP_MAY",
+    label: "Đập máy",
+    className: "bg-slate-100 text-slate-600 border-slate-200",
+  },
+  {
+    value: "TREO_MAY",
+    label: "Treo máy",
+    className: "bg-slate-100 text-slate-600 border-slate-200",
+  },
+  {
+    value: "THUE_BAO",
+    label: "Thuê bao",
+    className: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  },
+  {
+    value: "TIEU_CUC",
+    label: "Tiêu cực",
+    className: "bg-red-100 text-red-700 border-red-200",
+  },
+  {
+    value: "PHU_HUYNH",
+    label: "Phụ huynh",
+    className: "bg-purple-100 text-purple-700 border-purple-200",
+  },
+  {
+    value: "SAI_SO",
+    label: "Sai số",
+    className: "bg-slate-100 text-slate-500 border-slate-200",
+  },
 ];
 
 export const STEP_CONFIG = {
@@ -126,12 +192,21 @@ export const ROLE_OPTIONS = Object.keys(ROLE_CONFIG);
 
 export const APPOINTMENT_STATUS = {
   ...statusConfig,
-  CANCELLED: { label: "ĐÃ HUỶ", className: "bg-red-100 text-red-700 border-red-200" },
+  CANCELLED: {
+    label: "ĐÃ HUỶ",
+    className: "bg-red-100 text-red-700 border-red-200",
+  },
 };
 
 export const TRANG_THAI = {
-  chua_nop: { label: "Chưa nộp", cls: "border-amber-200 bg-amber-50 text-amber-600" },
-  da_nop:   { label: "Đã nộp",   cls: "border-emerald-200 bg-emerald-50 text-emerald-600" },
+  chua_nop: {
+    label: "Chưa nộp",
+    cls: "border-amber-200 bg-amber-50 text-amber-600",
+  },
+  da_nop: {
+    label: "Đã nộp",
+    cls: "border-emerald-200 bg-emerald-50 text-emerald-600",
+  },
 };
 
 export const MONTHS = Array.from({ length: 12 }, (_, i) => ({

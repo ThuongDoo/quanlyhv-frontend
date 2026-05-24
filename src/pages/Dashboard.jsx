@@ -32,6 +32,7 @@ function appointmentToStudent(apt) {
     consultant: apt.consultantId,
     scheduledAt: aptDate ? `${aptDate}T${aptTime || "00:00"}` : null,
     closingCallDate: apt.closingCallDate,
+    goi_chot: apt.goi_chot,
     status: apt.status,
   };
 }

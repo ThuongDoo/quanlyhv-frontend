@@ -49,6 +49,7 @@ export default function Students() {
   const [editingProcessing, setEditingProcessing] = useState(null); // { id, date, shift }
   const [editingScheduledAt, setEditingScheduledAt] = useState(null); // { id, date, hour, minute }
   const [editingNoteId, setEditingNoteId] = useState(null);
+  const [createResult, setCreateResult] = useState(null); // { type: "success"|"error", message }
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteResult, setDeleteResult] = useState(null); // { type: "success"|"error", message }
   const [noteDraft, setNoteDraft] = useState("");
@@ -121,10 +122,10 @@ export default function Students() {
         ([value, cfg]) => ({ value, label: cfg.label }),
       ),
       university: universities.map((v) => ({ value: v, label: v })),
-      ownerUserId: unique(students.map((s) => s.ownerUserId)).map((id) => {
-        const u = users.find((x) => (x._id || x.id) === id);
-        return { value: id, label: u?.name || u?.username || id };
-      }),
+      ownerUserId: [
+        { value: "__empty__", label: "Trống" },
+        ...users.map((u) => ({ value: u._id || u.id, label: u.name || u.username || u.email })),
+      ],
       consultant: users.map((u) => ({
         value: u._id || u.id,
         label: u.name || u.username || u.email,
@@ -254,19 +255,15 @@ export default function Students() {
         mobileCarrier: newStudent.mobileCarrier,
         university: newStudent.university,
       });
-      setNewStudent({
-        name: "",
-        phone: "",
-        year: new Date().getFullYear(),
-        mobileCarrier: "",
-        university: "",
-      });
+      setNewStudent({ name: "", phone: "", year: new Date().getFullYear(), mobileCarrier: "", university: "" });
       setShowCreatePanel(false);
       loadStudents();
+      setCreateResult({ type: "success", message: `Đã thêm học viên "${newStudent.name}" thành công!` });
     } catch (err) {
-      setError(
-        err?.response?.data?.error || err?.message || "Không thể tạo học viên.",
-      );
+      setCreateResult({
+        type: "error",
+        message: err?.response?.data?.error || err?.message || "Không thể tạo học viên.",
+      });
     }
   };
 
@@ -1902,6 +1899,27 @@ export default function Students() {
           onCancel={() => setDeleteConfirm(false)}
           danger
         />
+      )}
+
+      {createResult && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setCreateResult(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col items-center gap-3 py-2">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold ${createResult.type === "success" ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-500"}`}>
+                {createResult.type === "success" ? "✓" : "✕"}
+              </div>
+              <p className={`font-bold text-base text-center ${createResult.type === "success" ? "text-emerald-600" : "text-red-500"}`}>
+                {createResult.message}
+              </p>
+            </div>
+            <button
+              onClick={() => setCreateResult(null)}
+              className={`w-full rounded-xl py-2.5 text-sm font-bold text-white transition ${createResult.type === "success" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-500 hover:bg-red-600"}`}
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
       )}
 
       {deleteResult && (

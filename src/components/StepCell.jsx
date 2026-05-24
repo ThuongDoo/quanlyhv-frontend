@@ -6,6 +6,27 @@ import {
   formatStepInputValue,
 } from "../utils/studentHelpers";
 
+function StepBadge({ student, stepKey }) {
+  const config = STEP_CONFIG[stepKey];
+  const step = getStep(student, stepKey);
+  const result = step?.data?.result;
+  const option = config?.resultOptions?.find((o) => o.value === result);
+  const label = formatStepSummary(student, stepKey);
+
+  if (label === "-") return <span className="text-slate-300 text-xs">—</span>;
+
+  if (option?.className) {
+    const note = step?.data?.note ? ` • ${step.data.note}` : "";
+    return (
+      <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full border ${option.className}`}>
+        {option.label}{note}
+      </span>
+    );
+  }
+
+  return <span className="text-sm text-slate-700 break-words">{label}</span>;
+}
+
 export default function StepCell({
   student,
   stepKey,
@@ -66,9 +87,9 @@ export default function StepCell({
     <button
       type="button"
       onClick={() => onEditingChange(editingKey)}
-      className="w-full text-left rounded-2xl border border-transparent px-2 py-2 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50 break-words"
+      className="w-full text-left rounded-2xl border border-transparent px-2 py-2 hover:border-slate-300 hover:bg-slate-50"
     >
-      {formatStepSummary(student, stepKey)}
+      <StepBadge student={student} stepKey={stepKey} />
     </button>
   );
 }

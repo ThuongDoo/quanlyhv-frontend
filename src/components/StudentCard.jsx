@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { classificationConfig, statusConfig } from "../constants/studentConfig";
+import { classificationConfig, statusConfig, GOI_CHOT_RESULT_OPTIONS } from "../constants/studentConfig";
 import { studentApi } from "../services/students";
 import ConfirmModal from "./ConfirmModal";
 import ScheduleForm from "./ScheduleForm";
-import { fmtDate, fmtDateTime } from "../utils/dateHelpers";
+import { fmtDateTime } from "../utils/dateHelpers";
 import { appointmentApi } from "../services/appointments";
 
 function formatScheduledAt(raw) {
@@ -32,10 +32,10 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   const [schedConsultantId, setSchedConsultantId] = useState("");
   const [localScheduledAt, setLocalScheduledAt] = useState(undefined);
 
-  // Closing call date
-  const [closingOpen, setClosingOpen] = useState(false);
-  const [closingDate, setClosingDate] = useState("");
-  const [localClosingCallDate, setLocalClosingCallDate] = useState(undefined);
+  // Gọi chốt
+  const [localGoiChot, setLocalGoiChot] = useState(undefined);
+  const [goiChotOpen, setGoiChotOpen] = useState(false);
+  const goiChotRef = useRef(null);
 
   const [localConsultantId, setLocalConsultantId] = useState(undefined);
 
@@ -49,6 +49,13 @@ export default function StudentCard({ student, users = [], appointmentId }) {
     return () => document.removeEventListener("mousedown", h);
   }, [statusOpen]);
 
+  useEffect(() => {
+    if (!goiChotOpen) return;
+    const h = (e) => { if (!goiChotRef.current?.contains(e.target)) setGoiChotOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [goiChotOpen]);
+
 
   const typeCfg = classificationConfig[student.clasification || ""] ?? classificationConfig[""];
   const currentStatus = localStatus !== undefined ? localStatus : student.status;
@@ -60,8 +67,8 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   const scheduledAt = localScheduledAt !== undefined ? localScheduledAt : student.scheduledAt;
   const scheduledStr = formatScheduledAt(scheduledAt);
 
-  const closingCallDate = localClosingCallDate !== undefined ? localClosingCallDate : student.closingCallDate;
-  const closingStr = closingCallDate ? fmtDate(closingCallDate) : null;
+  const goiChot = localGoiChot !== undefined ? localGoiChot : (student.goi_chot || "OTHER");
+  const goiChotCfg = GOI_CHOT_RESULT_OPTIONS.find((o) => o.value === goiChot) || GOI_CHOT_RESULT_OPTIONS[0];
 
   const ownerUser = users.find((u) => (u._id || u.id) === student.ownerUserId);
   const saleName = ownerUser?.name || "Chưa chia";
@@ -123,30 +130,19 @@ export default function StudentCard({ student, users = [], appointmentId }) {
     setScheduleOpen(false);
   };
 
-  const openClosing = () => {
-    setClosingDate(closingCallDate
-      ? new Date(closingCallDate).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10)
-    );
-    setClosingOpen(true);
-  };
-
-  const applyClosingDate = () => {
-    const val = closingDate || null;
-    const display = val ? fmtDate(val) : "Xoá ngày liên hệ";
+  const applyGoiChot = (newVal) => {
+    setGoiChotOpen(false);
+    const label = GOI_CHOT_RESULT_OPTIONS.find((o) => o.value === newVal)?.label;
     confirm(
-      "Cập nhật ngày liên hệ",
-      `Đặt ngày liên hệ: ${display}?`,
+      "Cập nhật gọi chốt",
+      `Chuyển sang "${label}"?`,
       async () => {
-        setLocalClosingCallDate(val);
-        setClosingOpen(false);
+        setLocalGoiChot(newVal);
         try {
-          if (useAppointmentApi) await appointmentApi.update(appointmentId, { closingCallDate: val });
-          else await studentApi.updateStudent(student._id || student.id, { closingCallDate: val });
-        } catch { setLocalClosingCallDate(student.closingCallDate); }
+          await appointmentApi.update(appointmentId, { goi_chot: newVal });
+        } catch { setLocalGoiChot(goiChot); }
       }
     );
-    setClosingOpen(false);
   };
 
   const applyInsight = async () => {
@@ -182,7 +178,7 @@ export default function StudentCard({ student, users = [], appointmentId }) {
           {/* Header */}
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="font-bold text-slate-800 text-[15px] leading-snug truncate">{student.name}</h3>
+              <h3 className="font-bold text-slate-800 text-[15px] leading-snug truncate" title={student.name}>{student.name}</h3>
               <a href={`tel:${student.phone}`} className="text-blue-500 font-semibold text-sm mt-0.5 inline-block hover:underline">
                 {student.phone}
               </a>
@@ -217,11 +213,11 @@ export default function StudentCard({ student, users = [], appointmentId }) {
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div>
               <p className="uppercase tracking-wider font-semibold text-[10px] text-slate-400 mb-0.5">Sale</p>
-              <p className="text-sm font-semibold text-slate-700 truncate">{saleName}</p>
+              <p className="text-sm font-semibold text-slate-700 truncate" title={saleName}>{saleName}</p>
             </div>
             <div>
               <p className="uppercase tracking-wider font-semibold text-[10px] text-slate-400 mb-0.5">Tư vấn viên</p>
-              <p className="text-sm font-semibold text-slate-700 truncate">{consultantName}</p>
+              <p className="text-sm font-semibold text-slate-700 truncate" title={consultantName}>{consultantName}</p>
             </div>
           </div>
 
@@ -249,15 +245,30 @@ export default function StudentCard({ student, users = [], appointmentId }) {
                 <span className="text-[11px] text-slate-400">Chưa có</span>
               )}
             </button>
-            <button onClick={openClosing}
-              className={`flex flex-col items-start gap-0.5 rounded-xl px-3 py-2 transition hover:opacity-80 ${closingStr ? "bg-rose-50 border border-rose-200" : "border border-dashed border-slate-200"}`}>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-rose-400">📞 Ngày liên hệ</span>
-              {closingStr ? (
-                <span className="text-xs font-bold text-rose-600">{closingStr}</span>
-              ) : (
-                <span className="text-[11px] text-slate-400">Chưa có</span>
+            <div className="relative" ref={goiChotRef}>
+              <button
+                onClick={() => setGoiChotOpen((v) => !v)}
+                className={`w-full flex flex-col items-start gap-0.5 rounded-xl px-3 py-2 transition hover:opacity-80 border ${goiChot !== "OTHER" ? goiChotCfg.className : "border-dashed border-slate-200"}`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-widest text-rose-400">📞 Gọi chốt</span>
+                <span className={`text-xs font-bold ${goiChot !== "OTHER" ? "" : "text-slate-400"}`}>
+                  {goiChot !== "OTHER" ? goiChotCfg.label : "Chưa có"} ▾
+                </span>
+              </button>
+              {goiChotOpen && (
+                <div className="absolute left-0 bottom-full mb-1 z-30 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden min-w-[140px]">
+                  {GOI_CHOT_RESULT_OPTIONS.map((o) => (
+                    <button
+                      key={o.value}
+                      onClick={() => applyGoiChot(o.value)}
+                      className={`w-full text-left px-3 py-2 text-[11px] font-bold transition hover:opacity-90 ${o.className} ${o.value === goiChot ? "opacity-100" : "opacity-60"}`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </div>
@@ -329,23 +340,6 @@ export default function StudentCard({ student, users = [], appointmentId }) {
                   className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">Đóng</button>
               </>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Closing call date popup */}
-      {closingOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setClosingOpen(false)}>
-          <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-slate-800">📞 Ngày liên hệ</h3>
-            <input type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-200" />
-            <div className="flex gap-2">
-              <button onClick={() => setClosingOpen(false)}
-                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition">Huỷ</button>
-              <button onClick={applyClosingDate}
-                className="flex-1 rounded-xl bg-rose-500 py-2.5 text-sm font-bold text-white hover:bg-rose-600 transition">Xác nhận</button>
-            </div>
           </div>
         </div>
       )}
