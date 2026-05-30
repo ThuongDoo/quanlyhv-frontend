@@ -125,8 +125,8 @@ export default function StudentCard({ student, users = [], appointmentId }) {
         setScheduleOpen(false);
         try {
           if (useAppointmentApi) {
-            const [aptDate, aptTime] = newScheduledAt ? newScheduledAt.split("T") : [null, null];
-            await appointmentApi.update(appointmentId, { appointmentDate: aptDate, appointmentTime: aptTime, consultantId: schedConsultantId });
+            const aptTime = newScheduledAt ? newScheduledAt.split("T")[1] : null;
+            await appointmentApi.update(appointmentId, { appointmentDate: newScheduledAt, appointmentTime: aptTime, consultantId: schedConsultantId });
           } else {
             await studentApi.scheduleStudent(student._id || student.id, { consultantId: schedConsultantId, scheduledAt: newScheduledAt });
           }
