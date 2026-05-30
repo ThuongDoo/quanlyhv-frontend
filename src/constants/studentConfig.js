@@ -50,6 +50,17 @@ export const statusConfig = {
   },
 };
 
+export const LEARNING_MODE_CONFIG = {
+  offline: {
+    label: "Offline",
+    className: "bg-blue-100 text-blue-700 border-blue-200",
+  },
+  online: {
+    label: "Online",
+    className: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  },
+};
+
 export const MOBILE_CARRIER_OPTIONS = [
   { value: "viettel", label: "Viettel" },
   { value: "mobifone", label: "Mobifone" },

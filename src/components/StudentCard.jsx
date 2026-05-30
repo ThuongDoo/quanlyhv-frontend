@@ -60,6 +60,11 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   const typeCfg = classificationConfig[student.clasification || ""] ?? classificationConfig[""];
   const currentStatus = localStatus !== undefined ? localStatus : student.status;
   const statusCfg = statusConfig[currentStatus] || Object.values(statusConfig)[0];
+  const statusBarCls = statusCfg.className.includes("emerald") ? "bg-emerald-400"
+    : statusCfg.className.includes("amber") ? "bg-amber-400"
+    : statusCfg.className.includes("red") ? "bg-red-400"
+    : statusCfg.className.includes("blue") ? "bg-blue-400"
+    : "bg-slate-300";
 
   const rawInsight = Array.isArray(student.insights) ? student.insights[0] : student.insights;
   const insight = localInsight !== undefined ? localInsight : rawInsight;
@@ -176,9 +181,7 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   return (
     <>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
-        {typeCfg && (
-          <div className={`h-1 w-full ${typeCfg.className.includes("red") ? "bg-red-400" : typeCfg.className.includes("amber") ? "bg-amber-400" : typeCfg.className.includes("blue") ? "bg-blue-400" : "bg-slate-300"}`} />
-        )}
+        <div className={`h-1 w-full ${statusBarCls}`} />
 
         <div className="p-5 flex flex-col gap-4">
           {/* Header */}
@@ -225,6 +228,12 @@ export default function StudentCard({ student, users = [], appointmentId }) {
               <p className="uppercase tracking-wider font-semibold text-[10px] text-slate-400 mb-0.5">Tư vấn viên</p>
               <p className="text-sm font-semibold text-slate-700 truncate" title={consultantName}>{consultantName}</p>
             </div>
+            {student.university && (
+              <div className="col-span-2">
+                <p className="uppercase tracking-wider font-semibold text-[10px] text-slate-400 mb-0.5">Trường</p>
+                <p className="text-sm font-semibold text-slate-700 truncate" title={student.university}>{student.university}</p>
+              </div>
+            )}
           </div>
 
           {/* Insight */}

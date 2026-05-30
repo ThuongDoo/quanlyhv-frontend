@@ -31,6 +31,7 @@ export default function History() {
         </h1>
       </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col gap-6">
         {/* Chọn ngày */}
         <div className="flex items-center gap-3">
@@ -121,6 +122,7 @@ export default function History() {
             </table>
           </div>
         )}
+      </div>
       </div>
     </div>
   );
