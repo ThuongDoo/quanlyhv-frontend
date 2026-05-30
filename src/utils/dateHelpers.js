@@ -37,6 +37,26 @@ export function fmtDateTime(iso) {
   }
 }
 
+// Extract { date, hour, minute } theo múi giờ VN, dùng cho form edit lịch hẹn
+export function toVNTimeParts(iso) {
+  if (!iso) return { date: "", hour: "", minute: "00" };
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: VN_TZ,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(new Date(iso));
+    const get = (t) => parts.find((p) => p.type === t)?.value ?? "";
+    return {
+      date: `${get("year")}-${get("month")}-${get("day")}`,
+      hour: get("hour"),
+      minute: get("minute"),
+    };
+  } catch {
+    return { date: "", hour: "", minute: "00" };
+  }
+}
+
 // Chuyển ISO sang "YYYY-MM-DD" theo múi giờ VN, dùng cho input type="date"
 export function toVNDateString(iso) {
   if (!iso) return "";

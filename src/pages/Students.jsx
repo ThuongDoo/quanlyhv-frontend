@@ -13,6 +13,7 @@ import LoadingOverlay from "../components/LoadingOverlay";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import FilterDropdown from "../components/FilterDropdown";
+import DateRangeFilter from "../components/DateRangeFilter";
 import {
   classificationConfig,
   statusConfig,
@@ -109,14 +110,21 @@ export default function Students() {
     setPage(1);
   };
 
-  const activeFilterCount = Object.values(filters).reduce(
-    (sum, arr) => sum + (arr?.length || 0),
-    0,
-  );
+  const activeFilterCount = Object.entries(filters).reduce((sum, [key, val]) => {
+    if (key === "processingDate") return sum + (val?.from ? 1 : 0) + (val?.to ? 1 : 0);
+    return sum + (val?.length || 0);
+  }, 0);
 
   const filterOptions = useMemo(() => {
     const unique = (arr) => [...new Set(arr.filter(Boolean))];
     return {
+      year: [
+        { value: 1, label: "Năm 1" },
+        { value: 2, label: "Năm 2" },
+        { value: 3, label: "Năm 3" },
+        { value: 4, label: "Năm 4" },
+        { value: 0, label: "Không xác định" },
+      ],
       mobileCarrier: MOBILE_CARRIER_OPTIONS,
       clasification: Object.entries(classificationConfig).map(
         ([value, cfg]) => ({ value, label: cfg.label }),
@@ -149,6 +157,10 @@ export default function Students() {
         value,
         label: cfg.label,
       })),
+      warm: STEP_CONFIG.warm.resultOptions,
+      call1: STEP_CONFIG.call1.resultOptions,
+      call2: STEP_CONFIG.call2.resultOptions,
+      call3: STEP_CONFIG.call3.resultOptions,
     };
   }, [students, users, universities]);
 
@@ -160,15 +172,7 @@ export default function Students() {
       result = result.filter((s) =>
         filters.clasification.includes(s.clasification || ""),
       );
-    if (filters.campaign?.length) {
-      result = result.filter((s) => {
-        const hasEmpty = filters.campaign.includes("__empty__");
-        const vals = filters.campaign.filter((v) => v !== "__empty__");
-        if (hasEmpty && !s.campaign) return true;
-        if (vals.length && vals.includes(s.campaign)) return true;
-        return false;
-      });
-    }
+
     if (filters.scheduledAt?.length) {
       const hasFilter = filters.scheduledAt.includes("has");
       const emptyFilter = filters.scheduledAt.includes("empty");
@@ -179,13 +183,21 @@ export default function Students() {
         return true;
       });
     }
+    const SHIFT_ORDER = { S: 0, C: 1, T: 2 };
+    result = [...result].sort((a, b) => {
+      const da = a.processingDate ?? "";
+      const db = b.processingDate ?? "";
+      if (da !== db) return da < db ? -1 : 1;
+      return (SHIFT_ORDER[a.processingShift] ?? 9) - (SHIFT_ORDER[b.processingShift] ?? 9);
+    });
     return result;
-  }, [students, filters.clasification, filters.campaign, filters.scheduledAt]);
+  }, [students, filters.clasification, filters.scheduledAt]);
 
   const loadStudents = useCallback(async () => {
     try {
       setLoading(true);
       const params = { page, limit, search };
+      if (filters.year?.length) params.year = filters.year;
       if (filters.mobileCarrier?.length)
         params.mobileCarrier = filters.mobileCarrier;
       if (filters.university?.length) params.university = filters.university;
@@ -193,6 +205,13 @@ export default function Students() {
       if (filters.status?.length) params.status = filters.status;
       if (filters.currentStepKey?.length)
         params.currentStepKey = filters.currentStepKey[0] ?? "null";
+      if (filters.campaign?.length) params.campaign = filters.campaign;
+      if (filters.processingDate?.from) params.processingDateFrom = filters.processingDate.from;
+      if (filters.processingDate?.to) params.processingDateTo = filters.processingDate.to;
+      if (filters.warm?.length) params.warmResult = filters.warm;
+      if (filters.call1?.length) params.call1Result = filters.call1;
+      if (filters.call2?.length) params.call2Result = filters.call2;
+      if (filters.call3?.length) params.call3Result = filters.call3;
       const response = await studentApi.fetchStudents(params);
 
       setStudents(response.students || []);
@@ -672,13 +691,29 @@ export default function Students() {
           }}
         />
       )}
-      <FilterDropdown
-        rect={filterAnchorRect}
-        options={filterOptions[openFilterCol] || []}
-        selected={filters[openFilterCol] || []}
-        onToggle={(value) => toggleFilter(openFilterCol, value)}
-        onClear={() => clearFilter(openFilterCol)}
-      />
+      {openFilterCol === "processingDate" ? (
+        <DateRangeFilter
+          rect={filterAnchorRect}
+          from={filters.processingDate?.from ?? ""}
+          to={filters.processingDate?.to ?? ""}
+          onChange={(val) => {
+            setFilters((prev) => ({ ...prev, processingDate: val }));
+            setPage(1);
+          }}
+          onClear={() => {
+            setFilters((prev) => ({ ...prev, processingDate: { from: "", to: "" } }));
+            setPage(1);
+          }}
+        />
+      ) : (
+        <FilterDropdown
+          rect={filterAnchorRect}
+          options={filterOptions[openFilterCol] || []}
+          selected={filters[openFilterCol] || []}
+          onToggle={(value) => toggleFilter(openFilterCol, value)}
+          onClear={() => clearFilter(openFilterCol)}
+        />
+      )}
 
       <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-6 py-4 flex flex-col gap-4 overflow-hidden">
         <div className="flex items-center justify-between gap-3">
@@ -913,10 +948,8 @@ export default function Students() {
                   <th className="w-32 px-4 py-3 text-left font-semibold text-slate-600 sticky left-[200px] z-[4] bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                     SĐT
                   </th>
-                  <th className="w-16 px-4 py-3 text-left font-semibold text-slate-600">
-                    Năm
-                  </th>
                   {[
+                    { col: "year", label: "Năm", width: "w-16" },
                     { col: "mobileCarrier", label: "Nhà mạng", width: "w-28" },
                     { col: "clasification", label: "Phân Loại", width: "w-28" },
                     { col: "university", label: "Trường", width: "w-44" },
@@ -953,20 +986,58 @@ export default function Students() {
                     </th>
                   ))}
                   <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
-                    Ngày xử lý
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        if (openFilterCol === "processingDate") {
+                          setOpenFilterCol(null);
+                          setFilterAnchorRect(null);
+                        } else {
+                          setOpenFilterCol("processingDate");
+                          setFilterAnchorRect(e.currentTarget.getBoundingClientRect());
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters.processingDate?.from || filters.processingDate?.to ? "text-indigo-600" : ""}`}
+                    >
+                      Ngày xử lý
+                      {(filters.processingDate?.from || filters.processingDate?.to) && (
+                        <span className="bg-indigo-600 text-white text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
+                          {(filters.processingDate?.from ? 1 : 0) + (filters.processingDate?.to ? 1 : 0)}
+                        </span>
+                      )}
+                      <span className="text-xs opacity-50">▾</span>
+                    </button>
                   </th>
-                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
-                    Làm Ấm
-                  </th>
-                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
-                    Liên hệ Lần 1
-                  </th>
-                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
-                    Liên hệ Lần 2
-                  </th>
-                  <th className="w-36 px-4 py-3 text-left font-semibold text-slate-600">
-                    Liên hệ Lần 3
-                  </th>
+                  {[
+                    { col: "warm", label: "Làm Ấm", width: "w-36" },
+                    { col: "call1", label: "Liên hệ Lần 1", width: "w-36" },
+                    { col: "call2", label: "Liên hệ Lần 2", width: "w-36" },
+                    { col: "call3", label: "Liên hệ Lần 3", width: "w-36" },
+                  ].map(({ col, label, width }) => (
+                    <th key={col} className={`${width} px-4 py-3 text-left font-semibold text-slate-600`}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          if (openFilterCol === col) {
+                            setOpenFilterCol(null);
+                            setFilterAnchorRect(null);
+                          } else {
+                            setOpenFilterCol(col);
+                            setFilterAnchorRect(e.currentTarget.getBoundingClientRect());
+                          }
+                        }}
+                        className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
+                      >
+                        {label}
+                        {filters[col]?.length > 0 && (
+                          <span className="bg-indigo-600 text-white text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
+                            {filters[col].length}
+                          </span>
+                        )}
+                        <span className="text-xs opacity-50">▾</span>
+                      </button>
+                    </th>
+                  ))}
                   <th className="w-28 px-4 py-3 text-left font-semibold text-slate-600">
                     Đặt lịch
                   </th>

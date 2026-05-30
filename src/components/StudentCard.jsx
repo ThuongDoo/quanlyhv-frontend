@@ -3,7 +3,7 @@ import { classificationConfig, statusConfig, GOI_CHOT_RESULT_OPTIONS } from "../
 import { studentApi } from "../services/students";
 import ConfirmModal from "./ConfirmModal";
 import ScheduleForm from "./ScheduleForm";
-import { fmtDateTime } from "../utils/dateHelpers";
+import { fmtDateTime, toVNTimeParts } from "../utils/dateHelpers";
 import { appointmentApi } from "../services/appointments";
 
 function formatScheduledAt(raw) {
@@ -99,10 +99,16 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   };
 
   const openSchedule = () => {
-    const raw = scheduledAt ? new Date(scheduledAt) : null;
-    setSchedDate(raw ? raw.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
-    setSchedHour(raw ? String(raw.getHours()).padStart(2, "0") : "");
-    setSchedMinute(raw ? String(Math.round(raw.getMinutes() / 15) * 15).padStart(2, "0") : "00");
+    if (scheduledAt) {
+      const { date, hour, minute } = toVNTimeParts(scheduledAt);
+      setSchedDate(date);
+      setSchedHour(hour);
+      setSchedMinute(String(Math.round(Number(minute) / 15) * 15).padStart(2, "0"));
+    } else {
+      setSchedDate(new Date().toISOString().slice(0, 10));
+      setSchedHour("");
+      setSchedMinute("00");
+    }
     setSchedConsultantId(resolvedConsultantId || "");
     setScheduleOpen(true);
   };

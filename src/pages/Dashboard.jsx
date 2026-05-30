@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { appointmentApi } from "../services/appointments";
 import { authApi } from "../services/auth";
 import { useAuth } from "../hooks/useAuth";
@@ -7,8 +7,13 @@ import StudentCard from "../components/StudentCard";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import DateInput from "../components/DateInput";
-import { classificationConfig, ROLE_CONFIG, APPOINTMENT_STATUS } from "../constants/studentConfig";
+import {
+  classificationConfig,
+  ROLE_CONFIG,
+  APPOINTMENT_STATUS,
+} from "../constants/studentConfig";
 import LoadingOverlay from "../components/LoadingOverlay";
+import { toVNDateString } from "../utils/dateHelpers";
 
 function toDateInput(date) {
   return date.toISOString().slice(0, 10);
@@ -16,10 +21,11 @@ function toDateInput(date) {
 
 function appointmentToStudent(apt) {
   const s = apt.studentId || {};
-  const aptDate = apt.appointmentDate
-    ? apt.appointmentDate.split("T")[0]
-    : null;
-  const aptTime = apt.appointmentTime || null;
+  // appointmentDate là UTC từ server → convert sang VN date trước (e.g. T17:00Z → ngày hôm sau VN)
+  // appointmentTime là giờ VN giữ nguyên → ghép lại với +07:00
+  const aptDate = apt.appointmentDate ? toVNDateString(apt.appointmentDate) : null;
+  const aptTime = apt.appointmentTime || "00:00";
+  const scheduledAt = aptDate ? `${aptDate}T${aptTime}+07:00` : null;
   return {
     _id: s._id,
     name: s.name,
@@ -30,7 +36,7 @@ function appointmentToStudent(apt) {
     university: s.university,
     ownerUserId: apt.ownerUserId?._id || apt.ownerUserId,
     consultant: apt.consultantId,
-    scheduledAt: aptDate ? `${aptDate}T${aptTime || "00:00"}` : null,
+    scheduledAt,
     closingCallDate: apt.closingCallDate,
     goi_chot: apt.goi_chot,
     status: apt.status,
@@ -47,10 +53,13 @@ function AppointmentSection({
   users,
   page,
   onPaginationChange,
+  extraParams,
 }) {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
   const limit = 20;
+
+  console.log(appointments);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +73,7 @@ function AppointmentSection({
         }
         if (selectedStatus !== "") params.status = selectedStatus;
         if (filterType && filterValue) params[filterType] = filterValue;
+        if (extraParams) Object.assign(params, extraParams);
         const res = await appointmentApi.getAll(params);
         if (!cancelled) {
           setAppointments(res.appointments || []);
@@ -74,14 +84,27 @@ function AppointmentSection({
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [page, limit, scheduledDate, selectedStatus, filterType, filterValue]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    page,
+    limit,
+    scheduledDate,
+    selectedStatus,
+    filterType,
+    filterValue,
+    extraParams,
+  ]);
 
   const filtered = appointments.filter((apt) => {
     const s = apt.studentId || {};
     const q = search.toLowerCase();
-    const matchSearch = !q || s.name?.toLowerCase().includes(q) || s.phone?.includes(search);
-    const matchClass = !selectedClassification || (s.clasification || "") === selectedClassification;
+    const matchSearch =
+      !q || s.name?.toLowerCase().includes(q) || s.phone?.includes(search);
+    const matchClass =
+      !selectedClassification ||
+      (s.clasification || "") === selectedClassification;
     return matchSearch && matchClass;
   });
 
@@ -89,7 +112,9 @@ function AppointmentSection({
     <div className="flex flex-col gap-4">
       <LoadingOverlay show={loading} />
       {filtered.length === 0 && !loading ? (
-        <div className="text-center text-slate-400 py-10 text-sm">Không có lịch hẹn nào.</div>
+        <div className="text-center text-slate-400 py-10 text-sm">
+          Không có lịch hẹn nào.
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((apt) => (
@@ -118,12 +143,29 @@ export default function Dashboard() {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [activeSection, setActiveSection] = useState("owner");
+  const [selectedSale, setSelectedSale] = useState("");
+  const [selectedConsultant, setSelectedConsultant] = useState("");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
 
   const search = useDebounce(searchInput);
 
-  useEffect(() => { setPage(1); }, [search, scheduledDate, selectedStatus, selectedClassification, activeSection]);
+  useEffect(() => {
+    setPage(1);
+    setSelectedSale("");
+    setSelectedConsultant("");
+  }, [activeSection]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    search,
+    scheduledDate,
+    selectedStatus,
+    selectedClassification,
+    selectedSale,
+    selectedConsultant,
+  ]);
 
   useEffect(() => {
     authApi
@@ -131,6 +173,18 @@ export default function Dashboard() {
       .then((data) => setUsers(Array.isArray(data) ? data : data.users || []))
       .catch(() => {});
   }, []);
+
+  const saleUsers = users.filter((u) => u.role === "sale");
+  const consultantUsers = users.filter(
+    (u) => u.role === "consultant" || u.role === "admin",
+  );
+
+  const managerExtraParams = useMemo(() => {
+    const p = {};
+    if (selectedSale) p.ownerUserId = selectedSale;
+    if (selectedConsultant) p.consultantId = selectedConsultant;
+    return p;
+  }, [selectedSale, selectedConsultant]);
 
   const sectionProps = {
     scheduledDate,
@@ -154,9 +208,11 @@ export default function Dashboard() {
             {showSwitch && (
               <div className="flex rounded-xl overflow-hidden border border-slate-200">
                 {[
-                  { value: "owner",      role: "sale" },
+                  { value: "owner", role: "sale" },
                   { value: "consultant", role: "consultant" },
-                  ...(user?.role === "admin" ? [{ value: "manager", role: "admin" }] : []),
+                  ...(user?.role === "admin"
+                    ? [{ value: "manager", role: "admin" }]
+                    : []),
                 ].map((tab, i) => {
                   const cfg = ROLE_CONFIG[tab.role];
                   return (
@@ -227,10 +283,53 @@ export default function Dashboard() {
             >
               <option value="">Tất cả</option>
               {Object.entries(APPOINTMENT_STATUS).map(([key, cfg]) => (
-                <option key={key} value={key}>{cfg.label}</option>
+                <option key={key} value={key}>
+                  {cfg.label}
+                </option>
               ))}
             </select>
           </div>
+
+          {user?.role === "admin" && activeSection === "manager" && (
+            <>
+              <div className="w-px h-4 bg-slate-200 shrink-0" />
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
+                  Sale
+                </span>
+                <select
+                  value={selectedSale}
+                  onChange={(e) => setSelectedSale(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
+                >
+                  <option value="">Tất cả</option>
+                  {saleUsers.map((u) => (
+                    <option key={u._id || u.id} value={u._id || u.id}>
+                      {u.name || u.username || u.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-px h-4 bg-slate-200 shrink-0" />
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
+                  Tư vấn
+                </span>
+                <select
+                  value={selectedConsultant}
+                  onChange={(e) => setSelectedConsultant(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
+                >
+                  <option value="">Tất cả</option>
+                  {consultantUsers.map((u) => (
+                    <option key={u._id || u.id} value={u._id || u.id}>
+                      {u.name || u.username || u.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
 
           <div className="w-px h-4 bg-slate-200 shrink-0" />
 
@@ -263,8 +362,9 @@ export default function Dashboard() {
           ) : (
             <AppointmentSection
               key="manager"
-              filterType="managerId"
-              filterValue={userId}
+              filterType={null}
+              filterValue={null}
+              extraParams={managerExtraParams}
               {...sectionProps}
             />
           )
