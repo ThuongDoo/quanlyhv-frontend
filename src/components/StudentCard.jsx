@@ -32,6 +32,11 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   const [schedConsultantId, setSchedConsultantId] = useState("");
   const [localScheduledAt, setLocalScheduledAt] = useState(undefined);
 
+  // Phân loại
+  const [localClassification, setLocalClassification] = useState(undefined);
+  const [classOpen, setClassOpen] = useState(false);
+  const classRef = useRef(null);
+
   // Gọi chốt
   const [localGoiChot, setLocalGoiChot] = useState(undefined);
   const [goiChotOpen, setGoiChotOpen] = useState(false);
@@ -50,6 +55,13 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   }, [statusOpen]);
 
   useEffect(() => {
+    if (!classOpen) return;
+    const h = (e) => { if (!classRef.current?.contains(e.target)) setClassOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [classOpen]);
+
+  useEffect(() => {
     if (!goiChotOpen) return;
     const h = (e) => { if (!goiChotRef.current?.contains(e.target)) setGoiChotOpen(false); };
     document.addEventListener("mousedown", h);
@@ -57,7 +69,8 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   }, [goiChotOpen]);
 
 
-  const typeCfg = classificationConfig[student.clasification || ""] ?? classificationConfig[""];
+  const currentClassification = localClassification !== undefined ? localClassification : (student.clasification || "");
+  const typeCfg = classificationConfig[currentClassification] ?? classificationConfig[""];
   const currentStatus = localStatus !== undefined ? localStatus : student.status;
   const statusCfg = statusConfig[currentStatus] || Object.values(statusConfig)[0];
   const statusBarCls = statusCfg.className.includes("emerald") ? "bg-emerald-400"
@@ -86,6 +99,14 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   const confirm = (label, description, onConfirm) => setPending({ label, description, onConfirm });
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const applyClassification = async (newVal) => {
+    setClassOpen(false);
+    setLocalClassification(newVal);
+    try {
+      await studentApi.updateStudent(student._id || student.id, { clasification: newVal || null });
+    } catch { setLocalClassification(student.clasification || ""); }
+  };
 
   const applyStatusChange = (newStatus) => {
     setStatusOpen(false);
@@ -212,9 +233,24 @@ export default function StudentCard({ student, users = [], appointmentId }) {
                   </div>
                 )}
               </div>
-              {typeCfg && (
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${typeCfg.className}`}>{typeCfg.label}</span>
-              )}
+              <div className="relative" ref={classRef}>
+                <button
+                  onClick={() => setClassOpen((v) => !v)}
+                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border cursor-pointer hover:opacity-80 transition ${typeCfg.className}`}
+                >
+                  {typeCfg.label} ▾
+                </button>
+                {classOpen && (
+                  <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden min-w-[160px]">
+                    {Object.entries(classificationConfig).map(([key, cfg]) => (
+                      <button key={key} onClick={() => applyClassification(key)}
+                        className={`w-full text-left px-3 py-2 text-[11px] font-bold transition hover:opacity-90 ${cfg.className} ${key === currentClassification ? "opacity-100" : "opacity-60"}`}>
+                        {cfg.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

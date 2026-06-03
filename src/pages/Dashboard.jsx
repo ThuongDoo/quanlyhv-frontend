@@ -11,6 +11,7 @@ import {
   classificationConfig,
   ROLE_CONFIG,
   APPOINTMENT_STATUS,
+  GOI_CHOT_RESULT_OPTIONS,
 } from "../constants/studentConfig";
 import LoadingOverlay from "../components/LoadingOverlay";
 import { toVNDateString } from "../utils/dateHelpers";
@@ -23,7 +24,9 @@ function appointmentToStudent(apt) {
   const s = apt.studentId || {};
   // appointmentDate là UTC từ server → convert sang VN date trước (e.g. T17:00Z → ngày hôm sau VN)
   // appointmentTime là giờ VN giữ nguyên → ghép lại với +07:00
-  const aptDate = apt.appointmentDate ? toVNDateString(apt.appointmentDate) : null;
+  const aptDate = apt.appointmentDate
+    ? toVNDateString(apt.appointmentDate)
+    : null;
   const aptTime = apt.appointmentTime || "00:00";
   const scheduledAt = aptDate ? `${aptDate}T${aptTime}+07:00` : null;
   return {
@@ -54,10 +57,11 @@ function AppointmentSection({
   page,
   onPaginationChange,
   extraParams,
+  limit,
+  selectedGoiChot,
 }) {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
-  const limit = 20;
 
   console.log(appointments);
 
@@ -72,6 +76,10 @@ function AppointmentSection({
           params.appointmentDateTo = `${scheduledDate}T23:59:59+07:00`;
         }
         if (selectedStatus !== "") params.status = selectedStatus;
+        if (selectedGoiChot) params.goi_chot = selectedGoiChot;
+        if (search) params.search = search;
+        if (selectedClassification)
+          params.clasification = selectedClassification;
         if (filterType && filterValue) params[filterType] = filterValue;
         if (extraParams) Object.assign(params, extraParams);
         const res = await appointmentApi.getAll(params);
@@ -92,32 +100,24 @@ function AppointmentSection({
     limit,
     scheduledDate,
     selectedStatus,
+    selectedGoiChot,
+    search,
+    selectedClassification,
     filterType,
     filterValue,
     extraParams,
   ]);
 
-  const filtered = appointments.filter((apt) => {
-    const s = apt.studentId || {};
-    const q = search.toLowerCase();
-    const matchSearch =
-      !q || s.name?.toLowerCase().includes(q) || s.phone?.includes(search);
-    const matchClass =
-      !selectedClassification ||
-      (s.clasification || "") === selectedClassification;
-    return matchSearch && matchClass;
-  });
-
   return (
     <div className="flex flex-col gap-4">
       <LoadingOverlay show={loading} />
-      {filtered.length === 0 && !loading ? (
+      {appointments.length === 0 && !loading ? (
         <div className="text-center text-slate-400 py-10 text-sm">
           Không có lịch hẹn nào.
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((apt) => (
+          {appointments.map((apt) => (
             <StudentCard
               key={apt._id}
               student={appointmentToStudent(apt)}
@@ -141,6 +141,7 @@ export default function Dashboard() {
   const [scheduledDate, setScheduledDate] = useState(today);
   const [selectedClassification, setSelectedClassification] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [selectedGoiChot, setSelectedGoiChot] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [activeSection, setActiveSection] = useState("owner");
   const [selectedSale, setSelectedSale] = useState("");
@@ -163,6 +164,7 @@ export default function Dashboard() {
     scheduledDate,
     selectedStatus,
     selectedClassification,
+    selectedGoiChot,
     selectedSale,
     selectedConsultant,
   ]);
@@ -186,24 +188,28 @@ export default function Dashboard() {
     return p;
   }, [selectedSale, selectedConsultant]);
 
+  const PAGE_LIMIT = 20;
+
   const sectionProps = {
     scheduledDate,
     selectedClassification,
     selectedStatus,
+    selectedGoiChot,
     search,
     users,
     page,
+    limit: PAGE_LIMIT,
     onPaginationChange: setPagination,
   };
 
   return (
     <div className="h-full flex flex-col bg-slate-50 font-sans">
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-        {/* Row 1 */}
+        {/* Row 1: tiêu đề + tabs + ngày + tìm kiếm */}
         <div className="px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h1 className="font-extrabold text-slate-800 text-lg tracking-tight">
-              Bảng Chăm Sóc Khách Hàng
+            <h1 className="font-extrabold text-slate-800 text-lg tracking-tight shrink-0">
+              Chăm Sóc KH
             </h1>
             {showSwitch && (
               <div className="flex rounded-xl overflow-hidden border border-slate-200">
@@ -232,15 +238,10 @@ export default function Dashboard() {
                 })}
               </div>
             )}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <label className="font-medium shrink-0 text-xs">Ngày</label>
-              <DateInput
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-              />
-            </div>
+            <DateInput
+              value={scheduledDate}
+              onChange={(e) => setScheduledDate(e.target.value)}
+            />
             <SearchInput
               value={searchInput}
               onChange={setSearchInput}
@@ -248,98 +249,82 @@ export default function Dashboard() {
               className="w-44"
             />
           </div>
+          <Pagination
+            page={page}
+            totalPages={pagination.totalPages || 1}
+            total={pagination.total || 0}
+            limit={PAGE_LIMIT}
+            onPageChange={setPage}
+          />
         </div>
 
-        {/* Row 2: filters */}
-        <div className="px-6 py-2 border-t border-slate-100 flex items-center gap-4 bg-slate-50">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
-              Phân loại
-            </span>
-            <select
-              value={selectedClassification}
-              onChange={(e) => setSelectedClassification(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
-            >
-              <option value="">Tất cả</option>
-              {Object.entries(classificationConfig).map(([key, cfg]) => (
-                <option key={key} value={key}>
-                  {cfg.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="w-px h-4 bg-slate-200 shrink-0" />
-
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
-              Trạng thái
-            </span>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
-            >
-              <option value="">Tất cả</option>
-              {Object.entries(APPOINTMENT_STATUS).map(([key, cfg]) => (
-                <option key={key} value={key}>
-                  {cfg.label}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Row 2: bộ lọc */}
+        <div className="px-6 py-2 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center gap-2">
+          {[
+            {
+              label: "Phân loại",
+              value: selectedClassification,
+              onChange: setSelectedClassification,
+              options: Object.entries(classificationConfig).map(([k, v]) => ({ value: k, label: v.label })),
+            },
+            {
+              label: "Trạng thái",
+              value: selectedStatus,
+              onChange: setSelectedStatus,
+              options: Object.entries(APPOINTMENT_STATUS).map(([k, v]) => ({ value: k, label: v.label })),
+            },
+            {
+              label: "Gọi chốt",
+              value: selectedGoiChot,
+              onChange: setSelectedGoiChot,
+              options: GOI_CHOT_RESULT_OPTIONS.filter((o) => o.value !== "OTHER").map((o) => ({ value: o.value, label: o.label })),
+            },
+          ].map(({ label, value, onChange, options }) => (
+            <div key={label} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">{label}</span>
+              <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="text-xs font-semibold text-slate-700 bg-transparent outline-none cursor-pointer"
+              >
+                <option value="">Tất cả</option>
+                {options.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          ))}
 
           {user?.role === "admin" && activeSection === "manager" && (
             <>
-              <div className="w-px h-4 bg-slate-200 shrink-0" />
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
-                  Sale
-                </span>
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">Sale</span>
                 <select
                   value={selectedSale}
                   onChange={(e) => setSelectedSale(e.target.value)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
+                  className="text-xs font-semibold text-slate-700 bg-transparent outline-none cursor-pointer"
                 >
                   <option value="">Tất cả</option>
                   {saleUsers.map((u) => (
-                    <option key={u._id || u.id} value={u._id || u.id}>
-                      {u.name || u.username || u.email}
-                    </option>
+                    <option key={u._id || u.id} value={u._id || u.id}>{u.name || u.username || u.email}</option>
                   ))}
                 </select>
               </div>
-              <div className="w-px h-4 bg-slate-200 shrink-0" />
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
-                  Tư vấn
-                </span>
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">Tư vấn</span>
                 <select
                   value={selectedConsultant}
                   onChange={(e) => setSelectedConsultant(e.target.value)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
+                  className="text-xs font-semibold text-slate-700 bg-transparent outline-none cursor-pointer"
                 >
                   <option value="">Tất cả</option>
                   {consultantUsers.map((u) => (
-                    <option key={u._id || u.id} value={u._id || u.id}>
-                      {u.name || u.username || u.email}
-                    </option>
+                    <option key={u._id || u.id} value={u._id || u.id}>{u.name || u.username || u.email}</option>
                   ))}
                 </select>
               </div>
             </>
           )}
-
-          <div className="w-px h-4 bg-slate-200 shrink-0" />
-
-          <Pagination
-            page={page}
-            totalPages={pagination.totalPages || 1}
-            total={pagination.total || 0}
-            limit={20}
-            onPageChange={setPage}
-          />
         </div>
       </div>
 

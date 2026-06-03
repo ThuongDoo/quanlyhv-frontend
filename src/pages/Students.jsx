@@ -93,6 +93,7 @@ export default function Students() {
     mobileCarrier: "",
     university: "",
   });
+  console.log(students);
 
   const toggleFilter = (col, value) => {
     setFilters((prev) => {
@@ -110,10 +111,14 @@ export default function Students() {
     setPage(1);
   };
 
-  const activeFilterCount = Object.entries(filters).reduce((sum, [key, val]) => {
-    if (key === "processingDate") return sum + (val?.from ? 1 : 0) + (val?.to ? 1 : 0);
-    return sum + (val?.length || 0);
-  }, 0);
+  const activeFilterCount = Object.entries(filters).reduce(
+    (sum, [key, val]) => {
+      if (key === "processingDate")
+        return sum + (val?.from ? 1 : 0) + (val?.to ? 1 : 0);
+      return sum + (val?.length || 0);
+    },
+    0,
+  );
 
   const filterOptions = useMemo(() => {
     const unique = (arr) => [...new Set(arr.filter(Boolean))];
@@ -188,7 +193,10 @@ export default function Students() {
       const da = a.processingDate ?? "";
       const db = b.processingDate ?? "";
       if (da !== db) return da < db ? -1 : 1;
-      return (SHIFT_ORDER[a.processingShift] ?? 9) - (SHIFT_ORDER[b.processingShift] ?? 9);
+      return (
+        (SHIFT_ORDER[a.processingShift] ?? 9) -
+        (SHIFT_ORDER[b.processingShift] ?? 9)
+      );
     });
     return result;
   }, [students, filters.clasification, filters.scheduledAt]);
@@ -206,8 +214,10 @@ export default function Students() {
       if (filters.currentStepKey?.length)
         params.currentStepKey = filters.currentStepKey[0] ?? "null";
       if (filters.campaign?.length) params.campaign = filters.campaign;
-      if (filters.processingDate?.from) params.processingDateFrom = filters.processingDate.from;
-      if (filters.processingDate?.to) params.processingDateTo = filters.processingDate.to;
+      if (filters.processingDate?.from)
+        params.processingDateFrom = filters.processingDate.from;
+      if (filters.processingDate?.to)
+        params.processingDateTo = filters.processingDate.to;
       if (filters.warm?.length) params.warmResult = filters.warm;
       if (filters.call1?.length) params.call1Result = filters.call1;
       if (filters.call2?.length) params.call2Result = filters.call2;
@@ -701,7 +711,10 @@ export default function Students() {
             setPage(1);
           }}
           onClear={() => {
-            setFilters((prev) => ({ ...prev, processingDate: { from: "", to: "" } }));
+            setFilters((prev) => ({
+              ...prev,
+              processingDate: { from: "", to: "" },
+            }));
             setPage(1);
           }}
         />
@@ -994,15 +1007,19 @@ export default function Students() {
                           setFilterAnchorRect(null);
                         } else {
                           setOpenFilterCol("processingDate");
-                          setFilterAnchorRect(e.currentTarget.getBoundingClientRect());
+                          setFilterAnchorRect(
+                            e.currentTarget.getBoundingClientRect(),
+                          );
                         }
                       }}
                       className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters.processingDate?.from || filters.processingDate?.to ? "text-indigo-600" : ""}`}
                     >
                       Ngày xử lý
-                      {(filters.processingDate?.from || filters.processingDate?.to) && (
+                      {(filters.processingDate?.from ||
+                        filters.processingDate?.to) && (
                         <span className="bg-indigo-600 text-white text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
-                          {(filters.processingDate?.from ? 1 : 0) + (filters.processingDate?.to ? 1 : 0)}
+                          {(filters.processingDate?.from ? 1 : 0) +
+                            (filters.processingDate?.to ? 1 : 0)}
                         </span>
                       )}
                       <span className="text-xs opacity-50">▾</span>
@@ -1014,7 +1031,10 @@ export default function Students() {
                     { col: "call2", label: "Liên hệ Lần 2", width: "w-36" },
                     { col: "call3", label: "Liên hệ Lần 3", width: "w-36" },
                   ].map(({ col, label, width }) => (
-                    <th key={col} className={`${width} px-4 py-3 text-left font-semibold text-slate-600`}>
+                    <th
+                      key={col}
+                      className={`${width} px-4 py-3 text-left font-semibold text-slate-600`}
+                    >
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1023,7 +1043,9 @@ export default function Students() {
                             setFilterAnchorRect(null);
                           } else {
                             setOpenFilterCol(col);
-                            setFilterAnchorRect(e.currentTarget.getBoundingClientRect());
+                            setFilterAnchorRect(
+                              e.currentTarget.getBoundingClientRect(),
+                            );
                           }
                         }}
                         className={`flex items-center gap-1.5 hover:text-indigo-600 transition ${filters[col]?.length ? "text-indigo-600" : ""}`}
