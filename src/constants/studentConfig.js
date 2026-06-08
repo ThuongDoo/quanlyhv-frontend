@@ -52,11 +52,11 @@ export const statusConfig = {
 
 export const LEARNING_MODE_CONFIG = {
   offline: {
-    label: "Offline",
+    label: "OFF",
     className: "bg-blue-100 text-blue-700 border-blue-200",
   },
   online: {
-    label: "Online",
+    label: "ONL",
     className: "bg-emerald-100 text-emerald-700 border-emerald-200",
   },
 };
@@ -70,13 +70,41 @@ export const MOBILE_CARRIER_OPTIONS = [
 ];
 
 export const GOI_CHOT_RESULT_OPTIONS = [
-  { value: "OTHER",      label: "-",           className: "bg-slate-100 text-slate-500 border-slate-200" },
-  { value: "NHIET_TINH", label: "Nhiệt tình",  className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  { value: "HO_HUNG",    label: "Hờ hững",     className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
-  { value: "KNM",        label: "Không nghe máy", className: "bg-orange-100 text-orange-700 border-orange-200" },
-  { value: "TU_CHOI",    label: "Từ chối",     className: "bg-red-100 text-red-700 border-red-200" },
-  { value: "DOI_LICH",   label: "Đổi lịch",   className: "bg-blue-100 text-blue-700 border-blue-200" },
-  { value: "SAI_SO",     label: "Sai số",      className: "bg-slate-100 text-slate-500 border-slate-200" },
+  {
+    value: "OTHER",
+    label: "-",
+    className: "bg-slate-100 text-slate-500 border-slate-200",
+  },
+  {
+    value: "NHIET_TINH",
+    label: "Nhiệt tình",
+    className: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  },
+  {
+    value: "HO_HUNG",
+    label: "Hờ hững",
+    className: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  },
+  {
+    value: "KNM",
+    label: "Không nghe máy",
+    className: "bg-orange-100 text-orange-700 border-orange-200",
+  },
+  {
+    value: "TU_CHOI",
+    label: "Từ chối",
+    className: "bg-red-100 text-red-700 border-red-200",
+  },
+  {
+    value: "DOI_LICH",
+    label: "Đổi lịch",
+    className: "bg-blue-100 text-blue-700 border-blue-200",
+  },
+  {
+    value: "SAI_SO",
+    label: "Sai số",
+    className: "bg-slate-100 text-slate-500 border-slate-200",
+  },
 ];
 
 const CALL_RESULT_OPTIONS = [

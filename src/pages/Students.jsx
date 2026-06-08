@@ -76,6 +76,7 @@ export default function Students() {
     hour: "",
     minute: "00",
     consultantId: "",
+    learningMode: "offline",
   });
   const closeScheduleModal = () =>
     setScheduleModal({
@@ -85,6 +86,7 @@ export default function Students() {
       hour: "",
       minute: "00",
       consultantId: "",
+      learningMode: "offline",
     });
   const [newStudent, setNewStudent] = useState({
     name: "",
@@ -596,7 +598,8 @@ export default function Students() {
   };
 
   const handleScheduleSave = async () => {
-    const { studentId, date, hour, minute, consultantId } = scheduleModal;
+    const { studentId, date, hour, minute, consultantId, learningMode } =
+      scheduleModal;
     const time = `${hour || "00"}:${minute || "00"}`;
     const scheduledAt = date ? `${date}T${time}` : null;
     setStudents((prev) =>
@@ -615,6 +618,7 @@ export default function Students() {
           consultantId,
           appointmentDate: scheduledAt,
           appointmentTime: time,
+          learningMode,
           ownerUserId: currentUser?._id || currentUser?.id,
         }),
       ]);
@@ -1394,6 +1398,7 @@ export default function Students() {
                                   student.consultant?.id ||
                                   student.consultant ||
                                   "",
+                                learningMode: student.learningMode || "offline",
                               })
                             }
                             className="rounded-xl bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-100 transition"
@@ -1703,6 +1708,7 @@ export default function Students() {
               hour={scheduleModal.hour}
               minute={scheduleModal.minute}
               consultantId={scheduleModal.consultantId}
+              learningMode={scheduleModal.learningMode}
               users={users}
               onDateChange={(v) => setScheduleModal((p) => ({ ...p, date: v }))}
               onHourChange={(v) => setScheduleModal((p) => ({ ...p, hour: v }))}
@@ -1711,6 +1717,9 @@ export default function Students() {
               }
               onConsultantChange={(v) =>
                 setScheduleModal((p) => ({ ...p, consultantId: v }))
+              }
+              onLearningModeChange={(v) =>
+                setScheduleModal((p) => ({ ...p, learningMode: v }))
               }
               onSave={handleScheduleSave}
               onCancel={closeScheduleModal}

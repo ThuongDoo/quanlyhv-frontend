@@ -12,6 +12,7 @@ import {
   ROLE_CONFIG,
   APPOINTMENT_STATUS,
   GOI_CHOT_RESULT_OPTIONS,
+  LEARNING_MODE_CONFIG,
 } from "../constants/studentConfig";
 import LoadingOverlay from "../components/LoadingOverlay";
 import { toVNDateString } from "../utils/dateHelpers";
@@ -42,6 +43,7 @@ function appointmentToStudent(apt) {
     scheduledAt,
     closingCallDate: apt.closingCallDate,
     goi_chot: apt.goi_chot,
+    learningMode: apt.learningMode,
     status: apt.status,
   };
 }
@@ -59,6 +61,7 @@ function AppointmentSection({
   extraParams,
   limit,
   selectedGoiChot,
+  selectedLearningMode,
 }) {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -77,6 +80,7 @@ function AppointmentSection({
         }
         if (selectedStatus !== "") params.status = selectedStatus;
         if (selectedGoiChot) params.goi_chot = selectedGoiChot;
+        if (selectedLearningMode) params.learningMode = selectedLearningMode;
         if (search) params.search = search;
         if (selectedClassification)
           params.clasification = selectedClassification;
@@ -101,6 +105,7 @@ function AppointmentSection({
     scheduledDate,
     selectedStatus,
     selectedGoiChot,
+    selectedLearningMode,
     search,
     selectedClassification,
     filterType,
@@ -142,6 +147,7 @@ export default function Dashboard() {
   const [selectedClassification, setSelectedClassification] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedGoiChot, setSelectedGoiChot] = useState("");
+  const [selectedLearningMode, setSelectedLearningMode] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [activeSection, setActiveSection] = useState("owner");
   const [selectedSale, setSelectedSale] = useState("");
@@ -165,6 +171,7 @@ export default function Dashboard() {
     selectedStatus,
     selectedClassification,
     selectedGoiChot,
+    selectedLearningMode,
     selectedSale,
     selectedConsultant,
   ]);
@@ -195,6 +202,7 @@ export default function Dashboard() {
     selectedClassification,
     selectedStatus,
     selectedGoiChot,
+    selectedLearningMode,
     search,
     users,
     page,
@@ -278,6 +286,12 @@ export default function Dashboard() {
               value: selectedGoiChot,
               onChange: setSelectedGoiChot,
               options: GOI_CHOT_RESULT_OPTIONS.filter((o) => o.value !== "OTHER").map((o) => ({ value: o.value, label: o.label })),
+            },
+            {
+              label: "Hình thức",
+              value: selectedLearningMode,
+              onChange: setSelectedLearningMode,
+              options: Object.entries(LEARNING_MODE_CONFIG).map(([k, v]) => ({ value: k, label: v.label })),
             },
           ].map(({ label, value, onChange, options }) => (
             <div key={label} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5">

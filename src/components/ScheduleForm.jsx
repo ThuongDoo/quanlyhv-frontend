@@ -1,7 +1,8 @@
 import { useState } from "react";
 import DateInput from "./DateInput";
+import { LEARNING_MODE_CONFIG } from "../constants/studentConfig";
 
-export default function ScheduleForm({ date, hour, minute, consultantId, users, onDateChange, onHourChange, onMinuteChange, onConsultantChange, onSave, onCancel, saving }) {
+export default function ScheduleForm({ date, hour, minute, consultantId, learningMode, users, onDateChange, onHourChange, onMinuteChange, onConsultantChange, onLearningModeChange, onSave, onCancel, saving }) {
   const [attempted, setAttempted] = useState(false);
 
   const errors = {
@@ -76,6 +77,19 @@ export default function ScheduleForm({ date, hour, minute, consultantId, users, 
           ))}
         </select>
         {err("consultantId") && <p className="text-xs text-red-400">Vui lòng chọn tư vấn viên</p>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-slate-500">Hình thức học</label>
+        <select
+          value={learningMode}
+          onChange={(e) => onLearningModeChange(e.target.value)}
+          className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white transition"
+        >
+          {Object.entries(LEARNING_MODE_CONFIG).map(([key, cfg]) => (
+            <option key={key} value={key}>{cfg.label}</option>
+          ))}
+        </select>
       </div>
 
       <div className="flex gap-2 mt-1">

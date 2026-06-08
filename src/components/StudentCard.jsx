@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { classificationConfig, statusConfig, GOI_CHOT_RESULT_OPTIONS } from "../constants/studentConfig";
+import { classificationConfig, statusConfig, GOI_CHOT_RESULT_OPTIONS, LEARNING_MODE_CONFIG } from "../constants/studentConfig";
 import { studentApi } from "../services/students";
 import ConfirmModal from "./ConfirmModal";
 import ScheduleForm from "./ScheduleForm";
@@ -30,7 +30,9 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   const [schedHour, setSchedHour] = useState("");
   const [schedMinute, setSchedMinute] = useState("00");
   const [schedConsultantId, setSchedConsultantId] = useState("");
+  const [schedLearningMode, setSchedLearningMode] = useState("offline");
   const [localScheduledAt, setLocalScheduledAt] = useState(undefined);
+  const [localLearningMode, setLocalLearningMode] = useState(undefined);
 
   // Phân loại
   const [localClassification, setLocalClassification] = useState(undefined);
@@ -85,6 +87,12 @@ export default function StudentCard({ student, users = [], appointmentId }) {
   const scheduledAt = localScheduledAt !== undefined ? localScheduledAt : student.scheduledAt;
   const scheduledStr = formatScheduledAt(scheduledAt);
 
+  const learningMode = localLearningMode !== undefined ? localLearningMode : (student.learningMode || "offline");
+  const learningModeCfg = LEARNING_MODE_CONFIG[learningMode] || LEARNING_MODE_CONFIG.offline;
+  const scheduleCardCfg = learningMode === "online"
+    ? { box: "bg-red-50 border border-red-200", label: "text-red-400", text: "text-red-700" }
+    : { box: "bg-emerald-50 border border-emerald-200", label: "text-emerald-400", text: "text-emerald-700" };
+
   const goiChot = localGoiChot !== undefined ? localGoiChot : (student.goi_chot || "OTHER");
   const goiChotCfg = GOI_CHOT_RESULT_OPTIONS.find((o) => o.value === goiChot) || GOI_CHOT_RESULT_OPTIONS[0];
 
@@ -136,6 +144,7 @@ export default function StudentCard({ student, users = [], appointmentId }) {
       setSchedMinute("00");
     }
     setSchedConsultantId(resolvedConsultantId || "");
+    setSchedLearningMode(learningMode);
     setScheduleOpen(true);
   };
 
@@ -148,15 +157,16 @@ export default function StudentCard({ student, users = [], appointmentId }) {
       async () => {
         setLocalScheduledAt(newScheduledAt);
         setLocalConsultantId(schedConsultantId || null);
+        setLocalLearningMode(schedLearningMode);
         setScheduleOpen(false);
         try {
           if (useAppointmentApi) {
             const aptTime = newScheduledAt ? newScheduledAt.split("T")[1] : null;
-            await appointmentApi.update(appointmentId, { appointmentDate: newScheduledAt, appointmentTime: aptTime, consultantId: schedConsultantId });
+            await appointmentApi.update(appointmentId, { appointmentDate: newScheduledAt, appointmentTime: aptTime, consultantId: schedConsultantId, learningMode: schedLearningMode });
           } else {
             await studentApi.scheduleStudent(student._id || student.id, { consultantId: schedConsultantId, scheduledAt: newScheduledAt });
           }
-        } catch { setLocalScheduledAt(scheduledAt); setLocalConsultantId(resolvedConsultantId); }
+        } catch { setLocalScheduledAt(scheduledAt); setLocalConsultantId(resolvedConsultantId); setLocalLearningMode(learningMode); }
       }
     );
     setScheduleOpen(false);
@@ -288,10 +298,15 @@ export default function StudentCard({ student, users = [], appointmentId }) {
           {/* Footer — 2 dates */}
           <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
             <button onClick={openSchedule}
-              className={`flex flex-col items-start gap-0.5 rounded-xl px-3 py-2 transition hover:opacity-80 ${scheduledStr ? "bg-indigo-50 border border-indigo-200" : "border border-dashed border-slate-200"}`}>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">📅 Lịch hẹn</span>
+              className={`flex flex-col items-start gap-0.5 rounded-xl px-3 py-2 transition hover:opacity-80 ${scheduledStr ? scheduleCardCfg.box : "border border-dashed border-slate-200"}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${scheduledStr ? scheduleCardCfg.label : "text-indigo-400"}`}>📅 Lịch hẹn</span>
               {scheduledStr ? (
-                <span className="text-xs font-bold text-indigo-700">{scheduledStr}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className={`text-xs font-bold ${scheduleCardCfg.text}`}>{scheduledStr}</span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${learningModeCfg.className}`}>
+                    {learningModeCfg.label}
+                  </span>
+                </span>
               ) : (
                 <span className="text-[11px] text-slate-400">Chưa có</span>
               )}
@@ -334,11 +349,13 @@ export default function StudentCard({ student, users = [], appointmentId }) {
               hour={schedHour}
               minute={schedMinute}
               consultantId={schedConsultantId}
+              learningMode={schedLearningMode}
               users={users}
               onDateChange={setSchedDate}
               onHourChange={setSchedHour}
               onMinuteChange={setSchedMinute}
               onConsultantChange={setSchedConsultantId}
+              onLearningModeChange={setSchedLearningMode}
               onSave={applySchedule}
               onCancel={() => setScheduleOpen(false)}
             />
