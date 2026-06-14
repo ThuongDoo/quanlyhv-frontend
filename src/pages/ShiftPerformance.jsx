@@ -64,6 +64,11 @@ export default function ShiftPerformance() {
   const [doanhSo, setDoanhSo] = useState(0);
   const [doanhThu, setDoanhThu] = useState(0);
 
+  // D. Tư vấn
+  const [caTuVan, setCaTuVan] = useState(0);
+  const [doanhSoTuVan, setDoanhSoTuVan] = useState(0);
+  const [doanhThuTuVan, setDoanhThuTuVan] = useState(0);
+
   const parsedDate = date ? new Date(date) : null;
   const thang = parsedDate ? parsedDate.getMonth() + 1 : "";
   const tuan = parsedDate ? getWeekOfMonth(parsedDate) : "";
@@ -87,6 +92,9 @@ export default function ShiftPerformance() {
         hvDen,
         doanhSo,
         doanhThu,
+        caTuVan,
+        doanhSoTuVan,
+        doanhThuTuVan,
       });
       setMessage({ type: "success", text: "Lưu số liệu ca làm thành công!" });
     } catch (err) {
@@ -185,6 +193,19 @@ export default function ShiftPerformance() {
               <div className="flex flex-col gap-3">
                 <NumberInput label="Doanh số" value={doanhSo} onChange={setDoanhSo} inputCls="bg-white border-slate-200" />
                 <NumberInput label="Doanh thu" value={doanhThu} onChange={setDoanhThu} inputCls="bg-red-50 border-red-200" />
+              </div>
+            </div>
+
+            {/* D. Tư vấn */}
+            <div className="flex-1 px-8 py-6 flex flex-col gap-4 bg-purple-50/30">
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-black text-purple-100 leading-none">D</span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-purple-500">Tư vấn</span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <NumberInput label="Ca tư vấn" value={caTuVan} onChange={setCaTuVan} inputCls="bg-purple-50 border-purple-200" />
+                <NumberInput label="Doanh số tư vấn" value={doanhSoTuVan} onChange={setDoanhSoTuVan} inputCls="bg-white border-slate-200" />
+                <NumberInput label="Doanh thu tư vấn" value={doanhThuTuVan} onChange={setDoanhThuTuVan} inputCls="bg-purple-50 border-purple-200" />
               </div>
             </div>
           </div>

@@ -27,14 +27,32 @@ export function PerformanceSummary({ s = {}, title }) {
         </div>
       </div>
 
-      <div className="rounded-xl bg-red-50 border border-red-100 p-4 flex items-center justify-between">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">Tổng doanh thu</span>
-          <span className="text-xs text-red-300">DS: {(s.doanhSo ?? 0).toLocaleString("vi-VN")} đ</span>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-purple-50 border border-purple-100 p-4 flex flex-col gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400">Ca tư vấn</span>
+          <span className="text-3xl font-extrabold text-purple-600">{s.caTuVan ?? 0}</span>
         </div>
-        <span className="text-3xl font-extrabold text-red-500">
-          {(s.doanhThu ?? 0).toLocaleString("vi-VN")} đ
-        </span>
+        <div className="rounded-xl bg-violet-50 border border-violet-100 p-4 flex flex-col gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-violet-400">Doanh số tư vấn</span>
+          <span className="text-3xl font-extrabold text-violet-600">
+            {(s.doanhSoTuVan ?? 0).toLocaleString("vi-VN")} đ
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-red-50 border border-red-100 p-4 flex flex-col gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">Tổng doanh thu</span>
+          <span className="text-3xl font-extrabold text-red-500">
+            {(s.doanhThu ?? 0).toLocaleString("vi-VN")} đ
+          </span>
+        </div>
+        <div className="rounded-xl bg-purple-50 border border-purple-100 p-4 flex flex-col gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400">Doanh thu tư vấn</span>
+          <span className="text-3xl font-extrabold text-purple-500">
+            {(s.doanhThuTuVan ?? 0).toLocaleString("vi-VN")} đ
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -63,6 +81,9 @@ export function PerformanceTable({ rows = [], getLabel, tableTitle }) {
                 <th className="px-3 py-3 text-center">HV đến</th>
                 <th className="px-3 py-3 text-center">Doanh số</th>
                 <th className="px-3 py-3 text-center text-red-500">Doanh thu</th>
+                <th className="px-3 py-3 text-center">Ca TV</th>
+                <th className="px-3 py-3 text-center">DS TV</th>
+                <th className="px-3 py-3 text-center text-purple-500">DT TV</th>
               </tr>
             </thead>
             <tbody>
@@ -77,6 +98,11 @@ export function PerformanceTable({ rows = [], getLabel, tableTitle }) {
                   <td className="px-3 py-3 text-center">{row.doanhSo?.toLocaleString("vi-VN") ?? "—"}</td>
                   <td className="px-3 py-3 text-center font-semibold text-red-500">
                     {row.doanhThu?.toLocaleString("vi-VN") ?? "—"}
+                  </td>
+                  <td className="px-3 py-3 text-center">{row.caTuVan ?? "—"}</td>
+                  <td className="px-3 py-3 text-center">{row.doanhSoTuVan?.toLocaleString("vi-VN") ?? "—"}</td>
+                  <td className="px-3 py-3 text-center font-semibold text-purple-500">
+                    {row.doanhThuTuVan?.toLocaleString("vi-VN") ?? "—"}
                   </td>
                 </tr>
               ))}

@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { shiftPerformanceApi } from "../services/shiftPerformance";
+import { authApi } from "../services/auth";
+import { useAuth } from "../hooks/useAuth";
 import {
   PerformanceSummary,
   PerformanceTable,
@@ -9,18 +11,30 @@ import { fmtDate } from "../utils/dateHelpers";
 import LoadingOverlay from "../components/LoadingOverlay";
 
 export default function ReportWeek() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [date] = useState(getTodayString);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    authApi
+      .fetchUsers()
+      .then((data) => setUsers(Array.isArray(data) ? data : data.users || []))
+      .catch(() => {});
+  }, [isAdmin]);
 
   useEffect(() => {
     setLoading(true);
     shiftPerformanceApi
-      .getReportWeek(date)
+      .getReportWeek(date, isAdmin ? selectedUserId : undefined)
       .then((res) => setData(res))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, [date]);
+  }, [date, isAdmin, selectedUserId]);
 
   const weekRange = data ? `${fmtDate(data.weekStart)} → ${fmtDate(data.weekEnd)}` : "—";
 
@@ -33,9 +47,25 @@ export default function ReportWeek() {
             Báo cáo Tổng kết Tuần
           </h1>
         </div>
-        <span className="text-sm font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2">
-          {weekRange}
-        </span>
+        <div className="flex items-center gap-3">
+          {isAdmin && (
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+            >
+              <option value="">Tất cả</option>
+              {users.map((u) => (
+                <option key={u._id || u.id} value={u._id || u.id}>
+                  {u.name || u.username || u.email}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="text-sm font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2">
+            {weekRange}
+          </span>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">

@@ -1,26 +1,38 @@
 import { useState, useEffect } from "react";
 import { shiftPerformanceApi } from "../services/shiftPerformance";
+import { authApi } from "../services/auth";
+import { useAuth } from "../hooks/useAuth";
 import { SHIFTS, getTodayString } from "../constants/shifts";
 import LoadingOverlay from "../components/LoadingOverlay";
 
 export default function History() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [date, setDate] = useState(getTodayString);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    authApi
+      .fetchUsers()
+      .then((data) => setUsers(Array.isArray(data) ? data : data.users || []))
+      .catch(() => {});
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!date) return;
     setLoading(true);
     shiftPerformanceApi
-      .getByDate(date)
+      .getByDate(date, isAdmin ? selectedUserId : undefined)
       .then((res) => {
-        console.log(res);
-
         setHistory(res.performances ?? []);
       })
       .catch(() => setHistory([]))
       .finally(() => setLoading(false));
-  }, [date]);
+  }, [date, isAdmin, selectedUserId]);
 
   return (
     <div className="h-full flex flex-col bg-slate-50 font-sans">
@@ -44,6 +56,26 @@ export default function History() {
             onChange={(e) => setDate(e.target.value)}
             className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
           />
+
+          {isAdmin && (
+            <>
+              <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                Nhân viên
+              </label>
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+              >
+                <option value="">Tất cả</option>
+                {users.map((u) => (
+                  <option key={u._id || u.id} value={u._id || u.id}>
+                    {u.name || u.username || u.email}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
 
         {/* Bảng */}
@@ -69,6 +101,9 @@ export default function History() {
                   <th className="px-3 py-3 text-center">HV đến</th>
                   <th className="px-3 py-3 text-center">Doanh số</th>
                   <th className="px-3 py-3 text-center">Doanh thu</th>
+                  <th className="px-3 py-3 text-center">Ca TV</th>
+                  <th className="px-3 py-3 text-center">DS TV</th>
+                  <th className="px-3 py-3 text-center">DT TV</th>
                 </tr>
               </thead>
               <tbody>
@@ -114,6 +149,15 @@ export default function History() {
                       </td>
                       <td className="px-3 py-3 text-center font-semibold text-red-500">
                         {row.doanhThu?.toLocaleString("vi-VN") ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        {row.caTuVan ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        {row.doanhSoTuVan?.toLocaleString("vi-VN") ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 text-center font-semibold text-purple-500">
+                        {row.doanhThuTuVan?.toLocaleString("vi-VN") ?? "—"}
                       </td>
                     </tr>
                   );
