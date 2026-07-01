@@ -190,16 +190,6 @@ export default function Students() {
         return true;
       });
     }
-    const SHIFT_ORDER = { S: 0, C: 1, T: 2 };
-    result = [...result].sort((a, b) => {
-      const da = a.processingDate ?? "";
-      const db = b.processingDate ?? "";
-      if (da !== db) return da < db ? -1 : 1;
-      return (
-        (SHIFT_ORDER[a.processingShift] ?? 9) -
-        (SHIFT_ORDER[b.processingShift] ?? 9)
-      );
-    });
     return result;
   }, [students, filters.clasification, filters.scheduledAt]);
 
@@ -484,9 +474,8 @@ export default function Students() {
         processingDate: date || null,
         processingShift: shift || null,
       });
-    } catch (err) {
-      setError(err?.response?.data?.error || "Không thể cập nhật ngày xử lý.");
-      setPendingReload(true);
+    } catch {
+      loadStudents();
     }
   };
 
