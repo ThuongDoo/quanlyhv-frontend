@@ -2,6 +2,7 @@
 import * as XLSX from "xlsx";
 import { useDebounce } from "../hooks/useDebounce";
 import { fmtDate, fmtDateTime, toVNDateString } from "../utils/dateHelpers";
+import { formatStepSummary } from "../utils/studentHelpers";
 import { studentApi } from "../services/students";
 import { authApi } from "../services/auth";
 import { appointmentApi } from "../services/appointments";
@@ -434,6 +435,59 @@ export default function Students() {
       });
       setPendingReload(true);
     }
+  };
+
+  const handleExportExcel = () => {
+    const shiftLabels = { S: "Sáng", C: "Chiều", T: "Tối" };
+    const selected = students.filter((s) =>
+      selectedStudents.has(s.id || s._id),
+    );
+    const rows = selected.map((student) => {
+      const classification =
+        classificationConfig[student.clasification || ""] ??
+        classificationConfig[""];
+      const ownerUser = users.find(
+        (u) => (u._id || u.id) === student.ownerUserId,
+      );
+      const consultantName =
+        ownerUser?.name ||
+        ownerUser?.username ||
+        student.consultant?.name ||
+        student.saleMoi ||
+        "-";
+      const note = Array.isArray(student.insights)
+        ? student.insights[0] || "-"
+        : student.insights || "-";
+
+      return {
+        "Họ Tên": student.name || "-",
+        SĐT: student.phone || "-",
+        Năm: student.year || "-",
+        "Nhà mạng": student.mobileCarrier || "-",
+        "Phân Loại": classification.label,
+        Trường: student.university || "-",
+        "Sale Mới": consultantName,
+        "Chiến dịch": student.campaign || "-",
+        "Ngày xử lý": student.processingDate
+          ? fmtDate(student.processingDate)
+          : "-",
+        "Ca xử lý": shiftLabels[student.processingShift] || "-",
+        "Làm Ấm": formatStepSummary(student, "warm"),
+        "Liên hệ Lần 1": formatStepSummary(student, "call1"),
+        "Liên hệ Lần 2": formatStepSummary(student, "call2"),
+        "Liên hệ Lần 3": formatStepSummary(student, "call3"),
+        "Ngày hẹn": student.scheduledAt
+          ? fmtDateTime(student.scheduledAt)
+          : "-",
+        "Note Vấn đề": note,
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Học viên");
+    const dateStr = toVNDateString(new Date().toISOString());
+    XLSX.writeFile(workbook, `danh_sach_hoc_vien_${dateStr}.xlsx`);
   };
 
   const handleScheduledAtSave = async () => {
@@ -912,6 +966,13 @@ export default function Students() {
                     Chia data
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  Xuất file
+                </button>
                 {isAdmin && (
                   <button
                     type="button"
